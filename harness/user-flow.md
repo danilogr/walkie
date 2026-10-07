@@ -133,7 +133,6 @@ Ends the turn only when it has a transcript or an error.
    if nothing was captured. Then the speakers are given back.
 8. No speech → the heard-nothing sentinel. Otherwise the audio is transcribed.
 9. The microphone lock is released on every path.
-```
 
 ## `/walkie:talk` — you speak, it becomes the prompt
 
@@ -159,7 +158,6 @@ Once the notice has been shown, every attempt leaves exactly one telemetry row, 
 ended it: `ok`, `heard_nothing`, `refused` for a busy microphone or speakers that never
 came free, and `failed` for everything else, including a server that is not there or
 will not start.
-```
 
 ## Telemetry: the notice, the install ping and shipping
 
@@ -195,7 +193,6 @@ When the session ends, by stdin closing or by SIGTERM or SIGHUP, the lifespan's 
 writes `ended_at`, which puts the session back in the backlog; the next session ships it.
 A store that cannot be opened (corrupt, locked, unwritable) means this process collects
 nothing; walkie itself runs on.
-```
 
 ## The shared speech server
 

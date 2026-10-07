@@ -77,7 +77,7 @@ and `harness_version` (Claude Code, Antigravity, …).
 | Field | What it says |
 |---|---|
 | `utterance_id`, `install_id`, `session_id`, `seq`, `direction`, `source`, `occurred_at` | a random id per row, and the back-and-forth: the agent speaking (`speak`) or you being heard (`listen`, `talk`), in order, and when each ended |
-| `engine`, `model` | what did the work: the engine that actually spoke (a sentence `say` spoke while the neural server was down says `say`), and `magpie` or `nemotron-3.5` |
+| `engine`, `model` | what did the work: the engine that actually spoke (a sentence `say` spoke while the neural server was down says `say`), and the model, e.g. `magpie` or `nemotron-3.5` |
 | `voice` | a voice walkie's engines ship, or `custom` for any other name |
 | `device_kind` | the kind of microphone: built-in, USB, Bluetooth, virtual or unknown — never its name |
 | `intent` | why the agent spoke: a finished task, a blocker, a question, a recap, … |

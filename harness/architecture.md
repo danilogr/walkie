@@ -162,8 +162,9 @@ host closed the pipe.
 
 - **The wire carries no plugin name.** Contract v1 fixes the ping at three fields
   (`plugin_version`, `os`, `event`) and the transport sends no user agent, so a backend
-  cannot tell one plugin's ping from another's: walkie and voicebox send to the same
-  Worker and are counted together. A plugin's identity
+  cannot tell one plugin's ping from another's. Each plugin has its own telemetry
+  Worker (walkie: speak-telemetry; voicebox: voicebox-telemetry), so nothing needs
+  splitting by product. A plugin's identity
   (`TelemetryIdentity`) steers only the client: its variables, config directory,
   endpoint and disclosure version.
 
@@ -258,7 +259,11 @@ host closed the pipe.
   `mic/`, an owner pid in the file inside it, and a lock left by a dead session
   reclaimed by the next caller. Not queueing on the lock, which is worse than
   refusing — you would start talking and a window you are not looking at would take
-  the words. A lock directory with no owner file is another session mid-claim, refused as busy until it has gone 2 s unchanged (the speaker lock's window), and only then reclaimed as left by a session that died mid-claim; reclaiming it at once would let two sessions record from one microphone.
+  the words.
+  A lock directory with no owner file is another session mid-claim, refused as busy
+  until it has gone 2 s unchanged (the speaker lock's window), and only then reclaimed
+  as left by a session that died mid-claim; reclaiming it at once would let two sessions
+  record from one microphone.
 
 - **A second, in-process lock guards `listen` against itself.** The
   microphone lock is re-entrant by pid, which is what makes reclaiming a dead owner's
