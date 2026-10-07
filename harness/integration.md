@@ -1,4 +1,4 @@
-# Integrating the speech stack
+# <img src="../assets/walkie-detailed.svg" width="28" height="28" alt="" valign="middle" /> Integrating the speech stack
 
 > For building voice into an agent that is **not** this plugin — a local model, a
 > custom harness, a script. What to call, what to run yourself, and what will bite
@@ -13,7 +13,7 @@
 | | What you get | What you write | Use it when |
 |---|---|---|---|
 | **HTTP API** | Speech and transcription over OpenAI-compatible routes | Playback, mic capture, turn-taking | You are writing the agent loop yourself — **start here** |
-| **MCP server** | The plugin's tools, policy included | Nothing, if your harness is an MCP client | Your harness already speaks MCP and your model calls tools reliably |
+| **MCP server** | walkie's tools, policy included | Nothing, if your harness is an MCP client | Your harness already speaks MCP and your model calls tools reliably |
 | **Python modules** | Playback, mic capture with silence detection, a queue, a cross-process mic lock | Glue | You want the fiddly local-audio parts without rewriting them |
 
 They compose: most custom agents want the HTTP API for the models and a couple of
@@ -107,7 +107,7 @@ never used it, so treat the shape as unverified and read the server's own docs.
 ### Long files
 
 For a recording rather than an utterance, skip the HTTP API and run the CLI, which
-is what this plugin's `transcribe` tool does:
+is what voicebox's `transcribe` tool does:
 
 ```bash
 nemo-speech --quiet transcribe in.wav --model nemotron-3.5 \
@@ -127,15 +127,16 @@ rewriting those, import them:
 | Module | What it gives you |
 |---|---|
 | `speak_core.player` | `resolve_player(...)` picks a working playback command per platform from what is installed (`afplay`, `ffplay`, …) |
-| `speak.capture` | `MicrophoneRecorder.record(TrackerSettings)` records one utterance and returns a `Recording` carrying the audio, why it stopped, and whether anyone actually spoke. `SilenceTracker` is a pure state machine — it calibrates against ambient noise instead of a fixed threshold, so a quiet mic and a noisy room both work |
+| `walkie.capture` | `MicrophoneRecorder.record(TrackerSettings)` records one utterance and returns a `Recording` carrying the audio, why it stopped, and whether anyone actually spoke. `SilenceTracker` is a pure state machine — it calibrates against ambient noise instead of a fixed threshold, so a quiet mic and a noisy room both work |
 | `speak_core.queue` | `SpeechQueue` plays one utterance at a time, in order, never overlapping |
-| `speak.miclock` / `speak_core.exclusive` | One microphone holder at a time across processes, elected by an atomic `mkdir` |
+| `walkie.miclock` / `speak_core.exclusive` | One microphone holder at a time across processes, elected by an atomic `mkdir`, with an ownerless grace |
+| `speak_core.speaker` | `SpeakerLock`: one process at the speakers at a time; hold it while recording so nothing plays into the microphone |
 
 Defaults worth knowing: capture is **16 kHz mono**, and an utterance ends after
 **3 s** of silence.
 
 speak-core is not published to PyPI — depend on it by git tag
-(`speak-core @ git+https://github.com/danilogr/speak-core@v0.1.0`, a private
+(`speak-core @ git+https://github.com/danilogr/speak-core@v0.4.0`, a private
 repository), or copy the files you need. They are plain `asyncio` with no MCP in them.
 
 ## The MCP server
@@ -143,18 +144,17 @@ repository), or copy the files you need. They are plain `asyncio` with no MCP in
 If your harness is an MCP client, the plugin is a stdio server:
 
 ```bash
-uv run --directory /path/to/speak python -m speak
+uv run --directory /path/to/walkie python -m walkie
 ```
 
-Tools: `speak`, `listen`, `transcribe`, `transcription_status`, `list_voices`,
-`set_voice`, `stop_speaking`, `speech_status`. Configuration is environment
+Tools: `speak`, `listen`, `list_voices`, `set_voice`, `stop_speaking`, `speech_status`.
+File transcription is voicebox's (`transcribe`, `job_status`). Configuration is environment
 variables — see the README's table.
 
 Two caveats before choosing this. The tool descriptions carry policy written for
 Claude Code (when to speak, when to stay quiet, one-line recaps), which your model
-will also follow. And `listen` and `transcribe` assume a human at a desk: `listen`
-waits for the speech queue to drain before opening the mic, and only one
-transcription runs at a time, refused rather than queued.
+will also follow. And `listen` assumes a human at a desk: it waits for the speech queue to drain
+and for the speakers before opening the mic.
 
 ## What will bite you
 
@@ -174,7 +174,7 @@ that launcher's working directory, not the user's project.
 
 **Telemetry is the plugin's, not the server's.** Calling `nemo-speech` directly
 sends nothing anywhere. The plugin's own collection is documented in
-`TELEMETRY.md`. `SPEAK_TELEMETRY=off` disables it apart from the anonymous install
+`TELEMETRY.md`. `WALKIE_TELEMETRY=off` disables it apart from the anonymous install
 ping, and `DO_NOT_TRACK=1` disables both.
 
 ## Where things are
@@ -184,7 +184,7 @@ ping, and `DO_NOT_TRACK=1` disables both.
 | [`speak_core/engines/asr.py`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/engines/asr.py) | speak_core's ASR client: how it calls `/v1/audio/transcriptions`, including liveness handling |
 | [`speak_core/engines/`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/engines/) | The speech engines, including the HTTP one |
 | [`speak_core/supervisor.py`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/supervisor.py) | Starting, sharing and stopping one server across processes |
-| [`src/speak/transcribe/`](../src/speak/transcribe/) | The file-transcription feature: probe, convert, job records, the detached worker |
-| [`src/speak/capture.py`](../src/speak/capture.py), [`speak_core/player.py`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/player.py), [`speak_core/queue.py`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/queue.py) | The reusable local-audio parts |
+| [`src/walkie/speakers.py`](../src/walkie/speakers.py) | Holding the speaker lock for a recording |
+| [`src/walkie/capture.py`](../src/walkie/capture.py), [`speak_core/player.py`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/player.py), [`speak_core/queue.py`](https://github.com/danilogr/speak-core/blob/main/src/speak_core/queue.py) | The reusable local-audio parts |
 | [`harness/layout.md`](layout.md) | Exhaustive directory and file layout of the entire codebase |
 | [`harness/performance.md`](performance.md) | Every measured number and the hardware behind it |

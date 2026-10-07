@@ -1,4 +1,4 @@
-# Codebase Layout
+# <img src="../assets/walkie-detailed.svg" width="28" height="28" alt="" valign="middle" /> Codebase Layout
 
 > Exhaustive guide to the files and directories in this repository.
 > For system architecture, component boundaries, and design decisions, see [architecture.md](architecture.md).
@@ -7,19 +7,21 @@
 
 ```
 .
-├── .claude-plugin/         Plugin manifests and marketplace registration
-├── commands/               Claude Code slash commands (/speak:setup, /talk, etc.)
-├── harness/                Developer specs: architecture, flows, performance, guidelines
-├── scripts/                Shell launchers, cue sound synthesis, install helpers
-├── src/speak/              The speak plugin: MCP server, voice input, file transcription
+├── .claude-plugin/         The plugin manifest
+├── assets/                 walkie's art: the pixel icon and the hero image
+├── commands/               Claude Code slash commands (/walkie:talk, /walkie:setup, …)
+├── harness/                Developer docs: architecture, flows, performance, guidelines
+├── scripts/                Launchers, cue sound synthesis, the local install helper
+├── src/walkie/             The plugin: MCP server, speech tools, voice input
 │   ├── assets/             Synthesized WAV cue sounds
-│   ├── telemetry/          The plugin's telemetry wiring: contract, event composition, stats and consent commands (storage and reporting live in speak-core)
-│   └── transcribe/         Background audio/video file transcription subsystem
-├── tests/                  Test suite (460+ offline, mocked tests)
-└── voice-tuning/           Tools and dataset script for personalized ASR fine-tuning
+│   └── telemetry/          walkie's telemetry: contract, session, notice, stats and consent commands
+├── tests/                  Offline, mocked tests
+│   ├── contract/           The vendored speak-telemetry contract v1 and its tests
+│   └── telemetry/          Telemetry tests
+└── voice-tuning/           Recording a personal dataset and fine-tuning recognition
 ```
 
-Engines, supervisor, queue, speaker lock and telemetry mechanism live in speak-core.
+Engines, supervisor, queue, speaker lock and the telemetry mechanism live in speak-core.
 
 ---
 
@@ -27,134 +29,113 @@ Engines, supervisor, queue, speaker lock and telemetry mechanism live in speak-c
 
 | File | Purpose |
 |---|---|
-| [`README.md`](../README.md) | High-level project introduction, installation, available tools, commands, configuration, and developer quickstart. |
-| [`AGENTS.md`](../AGENTS.md) | Operating rules and behavioral constraints for AI coding agents working on this repository. |
-| [`TELEMETRY.md`](../TELEMETRY.md) | Complete documentation of all telemetry fields, privacy guarantees, database schema, and opt-out commands. |
-| [`pyproject.toml`](../pyproject.toml) | Python project configuration, dependencies, CLI entry points (`speak-mcp`, `speak-talk`, `speak-telemetry`, `speak-stats`), and tool settings for Ruff, Mypy, and Pytest. |
-| [`uv.lock`](../uv.lock) | Pinned dependency lockfile ensuring reproducible builds across all environments. |
+| [`README.md`](../README.md) | What walkie does, installing it, its tools, commands and settings, and the developer quickstart. |
+| [`AGENTS.md`](../AGENTS.md) | Operating rules for AI coding agents working on this repository. |
+| [`TELEMETRY.md`](../TELEMETRY.md) | Every telemetry field, the notice, the install count, and how to opt out. |
+| [`pyproject.toml`](../pyproject.toml) | Package metadata, the speak-core pin, the `walkie-mcp`, `walkie-talk`, `walkie-telemetry` and `walkie-stats` console scripts, and ruff/mypy/pytest settings. |
+| [`uv.lock`](../uv.lock) | Pinned dependency lockfile. |
 
 ---
 
-## Plugin Manifests & Launchers
+## Plugin Manifest & Launchers
 
 | File | Purpose |
 |---|---|
-| [`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json) | Claude Code plugin manifest defining the plugin name, version, description, author, repository, and registered slash commands. |
-| [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) | Local marketplace registry configuration allowing this repository to be installed via `/plugin marketplace add`. |
-| [`.mcp.json`](../.mcp.json) | Stdio MCP server registration file declaring how Claude Code launches the `speak` server using `scripts/speak-mcp`. |
-| [`scripts/speak-mcp`](../scripts/speak-mcp) | Main launcher executable: discovers `uv` on the host, syncs the virtual environment, and executes the `speak-mcp` entry point. |
-| [`scripts/speak-talk`](../scripts/speak-talk) | One-shot executable for prompt dictation: runs `speak-talk` to capture microphone audio and print the transcript to stdout. |
-| [`scripts/install-local.sh`](../scripts/install-local.sh) | Developer utility to sync the current git checkout directly into `~/.claude/plugins/cache/` for immediate testing in Claude Code. |
-| [`scripts/make-cues.py`](../scripts/make-cues.py) | Self-contained script using Python's standard `wave` and `math` libraries to synthesize the three shipped 16-bit PCM WAV cue sounds. |
+| [`.claude-plugin/plugin.json`](../.claude-plugin/plugin.json) | The plugin's name, version, description and repository. The marketplace that lists it is voicebox's. |
+| [`.mcp.json`](../.mcp.json) | Declares how Claude Code launches the `walkie` MCP server: `/bin/sh scripts/walkie-mcp`. |
+| [`scripts/walkie-mcp`](../scripts/walkie-mcp) | Finds `uv` on the host and runs the `walkie-mcp` entry point. |
+| [`scripts/walkie-talk`](../scripts/walkie-talk) | Finds `uv`, exports the host it is given as `WALKIE_HARNESS`, and runs `walkie-talk`, which records, transcribes and prints the transcript. |
+| [`scripts/install-local.sh`](../scripts/install-local.sh) | Copies this checkout over the installed plugin under `~/.claude/plugins/cache/voicebox-marketplace/walkie/<version>/`. |
+| [`scripts/make-cues.py`](../scripts/make-cues.py) | Synthesizes the three shipped 16-bit PCM WAV cue sounds with the standard `wave` and `math` modules. |
 
 ---
 
 ## Slash Commands (`commands/`)
 
-Markdown instruction files loaded by Claude Code when a user runs slash commands:
-
 | File | Command | Description |
 |---|---|---|
-| [`commands/setup.md`](../commands/setup.md) | `/speak:setup` | Guides Claude to bootstrap the neural speech engine, run `speak-core-setup`, check hardware, and configure `SPEAK_ENGINE=nemo`. |
-| [`commands/converse.md`](../commands/converse.md) | `/speak:converse` | Puts the session into spoken conversation mode: Claude speaks answers aloud via `speak` and listens for user replies via `listen`. |
-| [`commands/narrate.md`](../commands/narrate.md) | `/speak:narrate` | Instructs Claude to read long texts, files, or URLs aloud in controlled 10-sentence rounds without overwhelming the speech queue. |
-| [`commands/talk.md`](../commands/talk.md) | `/talk` | Captures user speech via `scripts/speak-talk`, injects the transcript into the prompt, and warns Claude to verify destructive actions. |
-| [`commands/telemetry.md`](../commands/telemetry.md) | `/speak:telemetry` | Runs `speak-telemetry` through `uv run` with the user's arguments: shows or changes the telemetry mode, prints the install id, or switches recordings on or off. |
-| [`commands/stats.md`](../commands/stats.md) | `/speak:stats` | Runs `speak-stats` through `uv run` to show what telemetry has collected on this machine. |
+| [`commands/talk.md`](../commands/talk.md) | `/walkie:talk` | Runs `scripts/walkie-talk`, injects the transcript into the prompt, and tells Claude to confirm destructive actions. |
+| [`commands/converse.md`](../commands/converse.md) | `/walkie:converse` | Spoken conversation mode for the rest of the session; also served as the `converse` MCP prompt. |
+| [`commands/setup.md`](../commands/setup.md) | `/walkie:setup` | Installs NVIDIA NeMo-Speech.cpp and both models through `speak-core-setup`, and shows the telemetry notice. |
+| [`commands/telemetry.md`](../commands/telemetry.md) | `/walkie:telemetry` | Runs `walkie-telemetry` with the user's arguments. |
+| [`commands/stats.md`](../commands/stats.md) | `/walkie:stats` | Runs `walkie-stats`. |
 
 ---
 
-## Harness Specifications (`harness/`)
-
-System specifications and engineering guidelines:
+## Harness (`harness/`)
 
 | File | Description |
 |---|---|
-| [`harness/architecture.md`](architecture.md) | Architectural boundaries, component responsibilities, state handling, and documented rationales for all key design decisions. |
-| [`harness/user-flow.md`](user-flow.md) | End-to-end request/response flows, audio playback lifecycle, silence detection state machine, and microphone device selection. |
-| [`harness/performance.md`](performance.md) | Measured benchmarks on Apple Silicon: synthesis and transcription latency, resident memory footprints, disk sizes, and warmup delays. |
-| [`harness/integration.md`](integration.md) | Guide for integrating the local speech stack into external agents, custom loops, or OpenAI-compatible client libraries. |
-| [`harness/design-guidelines.md`](design-guidelines.md) | Coding standards, Python 3.12+ type conventions, Ruff/Mypy/Pytest rules, logging conventions, and testing requirements. |
-| [`harness/layout.md`](layout.md) | This file: complete index and responsibility map of all codebase files. |
+| [`harness/architecture.md`](architecture.md) | Component boundaries, state, telemetry, external dependencies, and the rationale for each key decision. |
+| [`harness/user-flow.md`](user-flow.md) | Speaking, one recording state by state, choosing an input, `listen`, `/walkie:talk`, telemetry, and the shared speech server. |
+| [`harness/performance.md`](performance.md) | Measured latency, memory, disk and microphone figures, and the hardware behind them. |
+| [`harness/integration.md`](integration.md) | Building the local speech stack into an agent that is not this plugin. |
+| [`harness/design-guidelines.md`](design-guidelines.md) | Environment, naming, layering, errors, logging, comments and tests. |
+| [`harness/layout.md`](layout.md) | This file. |
 
 ---
 
-## Core Application (`src/speak/`)
+## The Plugin (`src/walkie/`)
 
 ### Server & Lifecycle
 
 | File | Responsibility |
 |---|---|
-| [`src/speak/__main__.py`](../src/speak/__main__.py) | Composition root: loads environment settings, initializes dependencies, and starts the MCP server over stdio. |
-| [`src/speak/server.py`](../src/speak/server.py) | Defines the tools (`speak`, `listen`, `transcribe`, etc.) and the `converse` prompt registered with the MCP client. |
-| [`src/speak/tools.py`](../src/speak/tools.py) | Tool metadata, parameter schemas, and the guidance prompt that tells Claude when to speak. |
-| [`src/speak/settings.py`](../src/speak/settings.py) | This plugin's `Settings`: embeds the server and voice settings and adds the `SPEAK_LISTEN_*`, input device, transcription and state-directory settings. |
-| [`src/speak/listening.py`](../src/speak/listening.py) | Capture limits, microphone, cue and transcription timeout, built the same way by `__main__` and `talk`. |
+| [`__main__.py`](../src/walkie/__main__.py) | Composition root: reads the environment, decides what telemetry may do, builds the engine, queue, ears and server, and serves on stdio. |
+| [`server.py`](../src/walkie/server.py) | The six tools, the `converse` prompt, `Ears`, and the reply that carries the first-run notice. |
+| [`tools.py`](../src/walkie/tools.py) | Tool descriptions, including the when-to-speak policy, and the messages tools answer with. |
+| [`config.py`](../src/walkie/config.py) | `Settings`: the shared server settings, a voice under `WALKIE_`, the listening settings and the state directory. |
+| [`listening.py`](../src/walkie/listening.py) | Capture limits, microphone, cue and transcription timeout, built the same way by `__main__` and `talk`. |
 
-### Microphone Input & Process Coordination
-
-| File | Responsibility |
-|---|---|
-| [`src/speak/capture.py`](../src/speak/capture.py) | Microphone recording: captures audio from the microphone and stops automatically when silence is detected. |
-| [`src/speak/cue.py`](../src/speak/cue.py) | Plays chime sounds when recording starts, stops, or detects no speech. |
-| [`src/speak/miclock.py`](../src/speak/miclock.py) | Microphone lock: ensures only one terminal session records audio at a time. |
-| [`src/speak/talk.py`](../src/speak/talk.py) | CLI entry point for `/talk`: coordinates microphone recording, transcribes speech, and outputs the result. |
-| [`src/speak/assets/`](../src/speak/assets/) | Shipped WAV audio chimes: `cue-open.wav`, `cue-close.wav`, and `cue-empty.wav`. |
-
----
-
-## File Transcription Subsystem (`src/speak/transcribe/`)
-
-Handles asynchronous transcription of local audio and video files:
+### Microphone, Speakers & Dictation
 
 | File | Responsibility |
 |---|---|
-| [`src/speak/transcribe/service.py`](../src/speak/transcribe/service.py) | Service interface: validates file transcription requests, schedules background jobs, and queries status. |
-| [`src/speak/transcribe/worker.py`](../src/speak/transcribe/worker.py) | Background worker: extracts audio, runs local speech recognition, and writes output files. |
-| [`src/speak/transcribe/jobs.py`](../src/speak/transcribe/jobs.py) | Job store: saves job metadata and progress to JSON records under the cache directory. |
-| [`src/speak/transcribe/probe.py`](../src/speak/transcribe/probe.py) | Media inspection: checks file duration and audio streams using `ffprobe`. |
-| [`src/speak/transcribe/prepare.py`](../src/speak/transcribe/prepare.py) | Audio converter: extracts and converts media to 16 kHz mono WAV using `ffmpeg` when needed. |
-| [`src/speak/transcribe/lock.py`](../src/speak/transcribe/lock.py) | Single-job lock: ensures only one file transcription runs at a time. |
-| [`src/speak/transcribe/commands.py`](../src/speak/transcribe/commands.py) | Command generator for external tools (`ffmpeg`, `ffprobe`, `nemo-speech transcribe`). |
-| [`src/speak/transcribe/output.py`](../src/speak/transcribe/output.py) | Output formatter: converts recognition results into plain text, JSON with word timestamps, SRT, or VTT. |
+| [`capture.py`](../src/walkie/capture.py) | Records one utterance from the microphone and stops on silence; picks the input device. |
+| [`cue.py`](../src/walkie/cue.py) | The chimes that bracket a recording. |
+| [`miclock.py`](../src/walkie/miclock.py) | One session records at a time; a claim in progress is busy, not free. |
+| [`speakers.py`](../src/walkie/speakers.py) | Holds the shared speaker lock for one recording, waiting up to `SPEAKER_WAIT_S`. |
+| [`__init__.py`](../src/walkie/__init__.py) | Marks the package; empty. |
+| [`talk.py`](../src/walkie/talk.py) | The `walkie-talk` entry point behind `/walkie:talk`: records, transcribes and prints. |
+| [`assets/`](../src/walkie/assets/) | `cue-open.wav`, `cue-close.wav` and `cue-empty.wav`. |
 
----
-
-## Telemetry Subsystem (`src/speak/telemetry/`)
-
-Manages local metrics collection and optional anonymous telemetry reporting:
+### Telemetry (`src/walkie/telemetry/`)
 
 | File | Responsibility |
 |---|---|
-| [`src/speak/telemetry/schema.sql`](../src/speak/telemetry/schema.sql) | SQLite schema for local database tracking sessions and performance. Columns marked `-- LOCAL` are never transmitted. |
-| [`src/speak/telemetry/contract.py`](../src/speak/telemetry/contract.py) | This plugin's schema: the bundled `schema.sql` plus the column lists, checked against it by a test. |
-| [`src/speak/telemetry/compose.py`](../src/speak/telemetry/compose.py) | This plugin's `build()`: `start_install`, its own `sessions` row, and the `TelemetrySession`. |
-| [`src/speak/telemetry/session.py`](../src/speak/telemetry/session.py) | Session tracker: records session start and end times. |
-| [`src/speak/telemetry/stats.py`](../src/speak/telemetry/stats.py) | This plugin's `speak-stats` rendering: plain SQL over its raw tables. |
-| [`src/speak/telemetry/commands.py`](../src/speak/telemetry/commands.py) | The `speak-telemetry` and `speak-stats` console scripts; the only telemetry module reading `os.environ` and `sys.argv`. |
+| [`__init__.py`](../src/walkie/telemetry/__init__.py) | Marks the package; empty. |
+| [`schema.sql`](../src/walkie/telemetry/schema.sql) | speak-telemetry contract v1's local schema, bundled byte for byte. Columns tagged `-- LOCAL` are never sent. |
+| [`contract.py`](../src/walkie/telemetry/contract.py) | walkie's `TelemetryIdentity`, the schema's column lists, and the store's path in the state dir. |
+| [`session.py`](../src/walkie/telemetry/session.py) | `TelemetrySession`: one row per sentence spoken or heard, clamped to the contract; never raises. |
+| [`compose.py`](../src/walkie/telemetry/compose.py) | `build()`: the install, walkie's `sessions` row and the `TelemetrySession`; `is_release`. |
+| [`notice.py`](../src/walkie/telemetry/notice.py) | The first-run notice's words, and `Notice`, which hands them out once. |
+| [`stats.py`](../src/walkie/telemetry/stats.py) | `walkie-stats`'s rendering: plain SQL over the local tables. |
+| [`commands.py`](../src/walkie/telemetry/commands.py) | The `walkie-telemetry` (with `notice`) and `walkie-stats` console scripts. |
 
 ---
 
 ## Voice Tuning (`voice-tuning/`)
 
-Personalized speech recognition fine-tuning toolkit:
-
 | File | Purpose |
 |---|---|
-| [`voice-tuning/record.py`](../voice-tuning/record.py) | Interactive CLI recording tool for macOS: guides users through multi-pass recordings of 70 test sentences and generates NeMo-compatible JSONL manifests. |
-| [`voice-tuning/sentences.txt`](../voice-tuning/sentences.txt) | 70 curated sentences spanning phonetic balance (Harvard sentences), accent markers, programming jargon, and spoken code identifiers. |
-| [`voice-tuning/README.md`](../voice-tuning/README.md) | Step-by-step tutorial for recording personal voice datasets and fine-tuning Nemotron 3.5 ASR models using adapters on an NVIDIA GPU. |
+| [`voice-tuning/record.py`](../voice-tuning/record.py) | Interactive recorder for macOS: multi-pass recordings of 70 sentences and NeMo-compatible JSONL manifests. |
+| [`voice-tuning/sentences.txt`](../voice-tuning/sentences.txt) | 70 sentences spanning phonetic balance, accent markers, programming jargon and spoken identifiers. |
+| [`voice-tuning/.gitignore`](../voice-tuning/.gitignore) | Keeps recorded audio and JSONL manifests out of git. |
+| [`voice-tuning/README.md`](../voice-tuning/README.md) | Recording a personal dataset and fine-tuning Nemotron 3.5 with adapters on an NVIDIA GPU. |
 
 ---
 
-## Test Suite (`tests/`)
-
-460+ automated tests executed with `uv run pytest`:
+## Tests (`tests/`)
 
 | Directory / File | What it tests |
 |---|---|
-| `tests/contract/` | Telemetry wire protocol compliance against JSON schemas and fixtures. |
-| `tests/telemetry/` | This plugin's telemetry: its contract, session, composition and stats. |
-| `tests/test_capture.py` | Microphone energy gating, calibration, silence timeouts, and device selection. |
-| `tests/test_transcribe_*.py` | Media probing, audio conversion, background worker lifecycle, and formatters. |
-| `tests/test_server.py` | MCP tool dispatch, parameter validation, and prompt handlers. |
+| `tests/conftest.py`, `tests/fakes.py` | The autouse fixture that keeps every test off this machine's real state and speech server, and the fakes the server-level tests share. |
+| `tests/contract/` | The vendored speak-telemetry contract v1, its fixtures, a freshness check against the sibling repo, and that what this client stores and ships validates as the server reads it. |
+| `tests/telemetry/` | walkie's telemetry: schema, session, composition, notice, consent and stats commands, `build()`'s decisions, and a real server over stdio. |
+| `tests/test_speakers.py` | Holding the speaker lock for a recording, against fakes and two real locks. |
+| `tests/test_listen_tool.py`, `tests/test_talk.py` | `listen` and `/walkie:talk`: drain, server checks, both locks, cues, transcripts, refusals and their telemetry rows. |
+| `tests/test_capture.py`, `tests/test_cue.py`, `tests/test_miclock.py`, `tests/test_listening.py` | Silence detection, device choice, cues, the microphone lock and capture limits. |
+| `tests/test_server.py`, `tests/test_stop_signals.py` | The real server over stdio, and stop signals unwinding through its shutdown. |
+| `tests/test_tools.py`, `tests/test_tool_behaviour.py`, `tests/test_random_voice.py`, `tests/test_harness_detection.py` | Tool schemas and descriptions, replies, voices, and harness detection. |
+| `tests/test_composition.py`, `tests/test_shutdown.py`, `tests/test_config.py`, `tests/test_manifests.py` | The composition root, shutdown order, settings, and the plugin's declarations of itself. |
+| `tests/test_voice_tuning.py` | The voice-tuning recorder's dataset logic. |

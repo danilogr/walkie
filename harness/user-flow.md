@@ -1,4 +1,4 @@
-# User flow
+# <img src="../assets/walkie-detailed.svg" width="28" height="28" alt="" valign="middle" /> User flow
 
 > What happens on each path through the plugin, the states a recording moves
 > through, and every branch that ends it early. Update when a flow or a terminal
@@ -10,7 +10,7 @@
 `speak` returns as soon as the sentence is accepted, so Claude never blocks on audio.
 
 1. The text is normalised: whitespace collapsed to one line, capped at
-   `SPEAK_MAX_CHARS` (400) at a word boundary. Empty after collapsing is an error.
+   `WALKIE_MAX_CHARS` (400) at a word boundary. Empty after collapsing is an error.
 2. The worker asks the engine to prepare it. For `nemo` that is an HTTP request for
    audio, written to a temp file; for `say` and `command` it is just a command line.
 3. The worker waits for the speaker lock, which another process may hold for one
@@ -99,7 +99,7 @@ then be read as the user's words.
 Tried in order, and the first one that is not `DEAF` is used and remembered for the
 rest of the process:
 
-1. `SPEAK_INPUT_DEVICE`, if set — and *only* that. A named device that is mute is an
+1. `WALKIE_INPUT_DEVICE`, if set — and *only* that. A named device that is mute is an
    error, never a reason to record from one the user did not ask for.
 2. The device already remembered by this process, if it is still present.
 3. The OS default input.
@@ -124,68 +124,86 @@ Ends the turn only when it has a transcript or an error.
 4. Liveness, then capability: a server that is absent, one still loading its models,
    and one running without a transcription model each get their own message, because
    the remedy for each is different and wrong for the other two.
-5. The microphone lock is claimed. Held by another session → refused, naming which.
-6. Open cue, played to completion, then record, then the closing cue — or the error
-   tone if nothing was captured.
-7. No speech → the heard-nothing sentinel. Otherwise the audio is transcribed.
-8. The lock is released on every path.
+5. The microphone lock is claimed. Held by another session, or being claimed by one →
+   refused, naming which when it can.
+6. The speakers are waited for, up to 60 s: a sentence another process (voicebox reading
+   aloud) or this session is playing finishes first. Not free by then → refused, with no
+   cue and nothing recorded.
+7. Open cue, played to completion, then record, then the closing cue — or the error tone
+   if nothing was captured. Then the speakers are given back.
+8. No speech → the heard-nothing sentinel. Otherwise the audio is transcribed.
+9. The microphone lock is released on every path.
+```
 
-## `/talk` — you speak, it becomes the prompt
+## `/walkie:talk` — you speak, it becomes the prompt
 
-A separate short-lived process, so it can neither see nor drain the speech queue.
+A separate short-lived process, so it can neither see nor drain the session's speech
+queue; it holds the speakers for its recording instead.
 
-1. Voice input off → one `speak:` line and a non-zero exit.
-2. It registers with the supervisor for the life of the process, so a standalone
-   `/talk` cannot leave a gigabyte of speech server behind it. The install ping, if one
-   is due, goes out alongside the recording and is abandoned rather than waited for.
-3. If the server does not answer and autostart is off, that is reported rather than
-   a server being started behind the user's back. Otherwise it is started.
-4. Capture runs exactly as for `listen`, minus the drain.
-5. Heard nothing → the `(heard nothing)` sentinel on stdout.
-6. A transcript goes to stdout, which is the product: the slash command splices it
-   into the prompt.
-7. Any failure prints one `speak:`-prefixed line to **both** streams and exits
-   non-zero. Never a traceback — stdout is read as the user's own words.
+1. It registers with the supervisor for the life of the process, so a standalone
+   `/walkie:talk` cannot leave a gigabyte of speech server behind it. Once the first-run
+   notice has been shown, the install ping, if one is due, goes out alongside the
+   recording and is abandoned rather than waited for.
+2. If the server does not answer and autostart is off, that is reported rather than a
+   server being started behind the user's back. Otherwise it is started.
+3. Capture runs exactly as for `listen` from step 4, minus the drain: server checks, the
+   microphone lock, the speakers (a sentence the session is playing finishes first, and
+   the session's next sentence waits), the cues and the recording.
+4. Heard nothing → the `(heard nothing)` sentinel on stdout.
+5. A transcript goes to stdout, which is the product: the slash command splices it into
+   the prompt.
+6. Any failure prints one `walkie:`-prefixed line to **both** streams and exits non-zero.
+   Never a traceback — stdout is read as the user's own words.
 
-Every attempt leaves exactly one telemetry row, whatever ended it: `ok`,
-`heard_nothing`, `refused` for a busy microphone, and `failed` for everything else,
-including a server that is not there or will not start.
+Once the notice has been shown, every attempt leaves exactly one telemetry row, whatever
+ended it: `ok`, `heard_nothing`, `refused` for a busy microphone or speakers that never
+came free, and `failed` for everything else, including a server that is not there or
+will not start.
+```
 
-## Telemetry: the install ping and shipping
+## Telemetry: the notice, the install ping and shipping
 
-At the start of each MCP session, before the consent file can be created:
+At the start of each MCP session (and each `/walkie:talk`):
 
-1. `DO_NOT_TRACK` set → no ping, no file, and nothing collected or shipped. Stop.
-2. The ping is due unless `ping.json` already names this version: with no `ping.json`,
-   it is an `install` when there is no `telemetry.json` either and an `upgrade` when
-   there is; with an older version in it, an `upgrade`. This is the same in every
+1. `DO_NOT_TRACK` set → no notice owed, no ping, no file, and nothing collected or
+   shipped. Stop.
+2. The first-run notice not yet shown for this disclosure → nothing collected, pinged or
+   shipped. The MCP session appends the notice, once, to the first reply of any tool but
+   `listen`, and records it as shown; `/walkie:setup` prints it and records it too.
+   `/walkie:talk` never shows it. Stop.
+3. A build whose version is not `major.minor.patch` → collect locally, send nothing.
+4. The ping is due unless `ping.json` already names this version: with no version in it,
+   it is an `install`; with an older one, an `upgrade`. This is the same in every
    telemetry mode.
 
 Then, in the background, once the session's event loop is running:
 
-3. A due ping is sent. A `2xx` writes `ping.json`; anything else leaves it due for the
-   next session. `SPEAK_TELEMETRY_DEBUG` logs it instead and writes nothing.
-4. In mode `on`, this install's backlog ships: utterance chunks of up to 100 rows,
-   each with the sessions its rows belong to, then every changed session no chunk
-   carried, on its own.
+5. A due ping is sent. A `2xx` writes `ping.json`; anything else leaves it due for the
+   next session. `WALKIE_TELEMETRY_DEBUG` logs it instead and writes nothing.
+6. In mode `on`, this install's backlog ships: utterance chunks of up to 100 rows, each
+   with the sessions its rows belong to, then every changed session no chunk carried, on
+   its own.
 
 | Answer | Utterances in that chunk | Its sessions | The run |
 |---|---|---|---|
-| `202` | shipped | shipped, unless changed while in flight | continues |
-| `400` | `rejected_at`, never resent | stay in the backlog | continues |
+| `202`, all accepted | shipped | shipped, unless changed while in flight | continues |
+| `202`, fewer accepted (the daily quota) | shipped | shipped | stops |
+| `400`, `413` | `rejected_at`, never resent | stay in the backlog | continues |
 | `429`, `5xx`, unreachable | stay in the backlog | stay in the backlog | stops after retries |
 
-When the session ends, by stdin closing or by SIGTERM or SIGHUP, the lifespan's
-shutdown writes `ended_at`, which puts the session back in the backlog; the next
-session ships it.
+When the session ends, by stdin closing or by SIGTERM or SIGHUP, the lifespan's shutdown
+writes `ended_at`, which puts the session back in the backlog; the next session ships it.
+A store that cannot be opened (corrupt, locked, unwritable) means this process collects
+nothing; walkie itself runs on.
+```
 
 ## The shared speech server
 
-One per machine, reference-counted on disk under the shared state directory (`<cache>/speak-core`).
+One per machine, reference-counted on disk under the shared state directory (`<cache>/speak-core`), and shared with voicebox when it is installed.
 
 | Situation | What happens |
 |---|---|
-| something answers on the port (session warmup, `/talk`) | no spawn: `NemoSupervisor.warm` leaves it alone, even one this machine has no record of |
+| something answers on the port (session warmup, `/walkie:talk`) | no spawn: `NemoSupervisor.warm` leaves it alone, even one this machine has no record of |
 | `server.json` names a live pid | no spawn; the port is probed and the caller proceeds |
 | another session holds the start lock | no spawn; the port is probed and the caller waits for it |
 | neither | the lock is claimed, the server spawned, its pid recorded, the port probed |

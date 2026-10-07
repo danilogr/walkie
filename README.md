@@ -1,202 +1,137 @@
-# <img src="assets/favicon.png" width="36" height="36" alt="Walkie logo" valign="middle" /> Walkie
+![walkie](assets/walkie-hero.jpg)
 
-Give Claude Code a voice, an ear, and a **private local transcription workstation**.
+# <img src="assets/walkie-detailed.svg" width="36" height="36" alt="" valign="middle" /> walkie
 
-**Walkie** (formerly `speak`) gives your terminal agent audio superpowers:
-1. **Speaks & Listens**: Claude speaks a short sentence aloud when a long task completes or when it needs input, and lets you speak prompts back instead of typing.
-2. **On-Device Audio & Video Transcription**: Transcribe meetings, interviews, voice memos, and videos entirely on your machine using a compact, local speech model—with zero cloud fees, complete data privacy, speaker labeling, and subtitle exports.
+Talk with your coding agent. Runs entirely on your machine, powered by
+[NVIDIA NeMo-Speech.cpp](https://github.com/NVIDIA/NeMo-Speech.cpp): MagpieTTS for speech
+and Nemotron 3.5 for recognition.
 
----
+- **It speaks** one short sentence when a task finishes, when it is blocked, or when it
+  needs an answer, and stays quiet otherwise.
+- **It listens** for your answer when it has asked you something.
+- **`/walkie:talk`** turns what you say into your next prompt.
+- **`/walkie:converse`** makes the rest of the session a spoken conversation.
 
-## What You Can Do
+Nothing you say or hear leaves your machine.
 
-- **Local Audio & Video Transcription**: Drop any media file (`.mp3`, `.m4a`, `.mp4`, `.mov`, etc.) into your workspace and get speaker-labeled text, word timestamps, or subtitle files (`.srt`, `.vtt`) in the background.
-- **Hands-Free Task Alerts**: Claude speaks a brief status update when a long build or test finishes, or when it hits a blocker.
-- **Voice Dictation (`/talk`)**: Speak your next prompt through your microphone instead of typing.
-- **Interactive Spoken Conversations (`/speak:converse`)**: Turn your entire session into a two-way spoken dialogue.
-- **Document & Article Narration (`/speak:narrate`)**: Have Claude read a web page, markdown file, or PR description aloud while you work.
+walkie is the add-on to [voicebox](https://github.com/danilogr/voicebox), which
+transcribes recordings, writes voice-overs and reads long text aloud. Installed together
+they share one speech server and one copy of the models, and take turns at the speakers.
 
----
+## Install
 
-## <img src="assets/transcribe-detailed.svg" width="28" height="28" alt="Offline Transcribe" valign="middle" /> Local Audio & Video Transcription
+In Claude Code:
 
-If you regularly transcribe meetings, user interviews, lectures, podcasts, or video clips, `speak` gives you a dedicated local transcription workflow directly inside Claude Code.
+    /plugin marketplace add danilogr/voicebox
+    /plugin install walkie@voicebox-marketplace
 
-### Why Transcribe Locally?
+walkie needs [uv](https://docs.astral.sh/uv/), which launches it; if `uv` is not on the
+`PATH` or in a standard location, set `WALKIE_UV` (used by the launchers) to its full path.
 
-- **100% Private & On-Device**: Audio never leaves your computer. Transcribe sensitive customer calls, confidential meetings, and proprietary demos without sending data to external APIs or cloud providers.
-- **Free & Unlimited**: No subscriptions, no usage tiers, and no per-minute API bills.
-- **Runs in the Background**: Transcription runs as a detached background worker. You can continue writing code, running tests, or asking Claude questions while your file transcribes.
-- **Fast, Compact Local Model**: Uses NVIDIA's streaming `nemotron-3.5` model (0.6B parameters) running locally via NeMo-Speech.cpp with hardware acceleration (Metal on Apple Silicon). It processes roughly 7 minutes of audio per minute of work.
-- **Speaker Labeling (Diarization)**: Automatically identifies and separates different speakers in meetings or multi-person interviews.
-- **Multiple Output Formats**:
-  - **Plain Text**: Clean reading format for meeting recaps, notes, or documentation.
-  - **JSON**: Detailed word-level timestamps and speaker IDs for indexing and search.
-  - **Subtitles (`.srt`, `.vtt`)**: Ready to use in video editing software or web video players.
-- **Automatic Language Detection & Translation**: Transcribe speech in dozens of languages or translate foreign-language audio directly to English.
-- **Universal Format Support**: Any media format supported by `ffmpeg` works out of the box (`.mp3`, `.m4a`, `.wav`, `.aac`, `.flac`, `.mp4`, `.mov`, `.mkv`).
+Restart Claude Code. walkie speaks at once through the macOS `say` voice. Run
+`/walkie:setup` once for the neural voice and for listening: it installs NeMo-Speech.cpp
+and its two models (about 1.4 GB) and shows walkie's one-time telemetry notice. Then set
+`WALKIE_ENGINE=nemo` for the neural voice. walkie works under Antigravity too, as an MCP
+server; `/walkie:converse` is offered there as the `converse` prompt.
 
-### Example Prompts for Claude
+## Speaking
 
-You can trigger transcriptions naturally during any Claude session:
+The `speak` tool's own description tells the agent when a voice beats scrollback: a
+finished task, a blocker, a question, and a one-line recap at the end of a substantial
+turn. It never reads code, paths or long output aloud. Sentences queue and play in order
+without overlapping, and the next one is synthesized while one plays. While the speech
+server is still starting, a sentence is spoken by `say` rather than lost.
 
-> *"Transcribe `meeting.m4a` with speaker labels and write a summary of key decisions."*
->
-> *"Generate `.srt` subtitles for `demo.mp4`."*
->
-> *"Transcribe `interview.mov` to JSON with word timestamps."*
->
-> *"Transcribe `french-lecture.mp3` and translate it to English."*
->
-> *"What is the status of my transcription job?"*
+## Listening
 
-Claude starts the job in the background, reports the estimated completion time, and lets you check on progress anytime with `transcription_status`.
+- **`listen`** — after asking you something out loud, the agent opens the microphone,
+  records until you stop talking, and reads the transcript.
+- **`/walkie:talk`** — say your next prompt instead of typing it.
+- **`/walkie:converse`** — for the rest of the session the agent speaks its answers and
+  listens for yours whenever it needs input. Say "stop" to go back to text.
 
----
+A chime says the microphone is open and another that it has shut; recording stops after
+three seconds of silence. One session records at a time. While the microphone is open
+walkie holds the speakers: a sentence already playing finishes first, and nothing else —
+voicebox reading aloud, or walkie's own next sentence — plays until the recording ends.
+The transcript comes from a small on-device model and may contain misheard words, so the
+agent confirms before anything destructive.
 
-## Quick Start
+## Tools and commands
 
-### 1. Install the Plugin
-
-In your Claude Code terminal:
-
-```bash
-/plugin marketplace add ~/dev/claude-plugins/speak
-/plugin install speak@speak-marketplace
-```
-
-Restart Claude Code. The plugin automatically prepares its environment using [uv](https://docs.astral.sh/uv/) and works immediately with your Mac's built-in system voice.
-
-### 2. Set Up the Local Speech & Transcription Model
-
-For file transcription and neural voice features, run the one-time setup:
-
-```bash
-/speak:setup
-```
-
-This installs NeMo-Speech.cpp and downloads the compact local models (~1.4 GB total: MagpieTTS for speech synthesis and Nemotron-3.5 for streaming speech recognition). The plugin manages the local server process automatically.
-
-*Note: File transcription requires `ffmpeg` (`brew install ffmpeg`).*
-
----
-
-## Conversational Voice Features
-
-### Dictating Prompts (`/talk`)
-Say your prompt instead of typing:
-1. Run `/talk`.
-2. A chime confirms the microphone is open.
-3. Speak your request. When you finish (3 seconds of silence), a closing chime sounds.
-4. Your spoken words are transcribed by the local model and inserted directly as your next message.
-
-### Interactive Conversation Mode (`/speak:converse`)
-Run `/speak:converse` to turn the session into a continuous voice conversation. Claude speaks its responses aloud and automatically listens for your voice reply whenever it needs input. Tell Claude to stop or ask for quiet to return to text mode at any time.
-
-### <img src="assets/narrate-detailed.svg" width="24" height="24" alt="Offline Narrate" valign="middle" /> Reading Long Documents Aloud (`/speak:narrate`)
-Have Claude read any local file or web article:
-
-```bash
-/speak:narrate ./docs/spec.md
-/speak:narrate https://example.com/blog-post
-```
-
-Narration reads prose verbatim while filtering out code blocks, tables, and visual links, playing in small 10-sentence rounds that stop instantly if interrupted.
-
----
-
-## Available Tools
-
-Claude uses these tools automatically based on your instructions:
-
-| Tool | Description |
+| Tool | What it does |
 |---|---|
-| `transcribe(path, format?, diarize?, language?, translate?)` | Starts a background transcription job for a local audio or video file. |
-| `transcription_status(job_id?)` | Checks status, progress, completion preview, or failure reasons for transcription jobs. |
-| `speak(text)` | Queues a sentence to be spoken out loud. Plays in order without overlapping. |
-| `stop_speaking()` | Instantly silences current playback and clears pending sentences. |
-| `listen(max_seconds?)` | Opens the microphone, records your answer, and returns the transcript. |
-| `list_voices()` | Lists available voices for the active speech engine. |
-| `set_voice(voice)` | Changes the voice for the current session. |
-| `speech_status()` | Reports playback status and the number of utterances in the queue. |
-
----
-
-## Available Commands
+| `speak(text, voice?, rate?, intent?)` | Queues one short sentence to be spoken |
+| `listen(max_seconds?)` | Records your answer and returns the transcript |
+| `list_voices()` | The voices the current engine has, and which one is active |
+| `set_voice(voice)` | Changes the voice for this session |
+| `speech_status()` | What the speech queue is holding |
+| `stop_speaking()` | Stops talking at once and drops what is queued |
 
 | Command | What it does |
 |---|---|
-| `/talk` | Speak your next prompt through the microphone instead of typing. |
-| `/speak:converse` | Start two-way spoken conversation mode for the current session. |
-| `/speak:narrate` | Read a document, web page, or conversation snippet out loud. |
-| `/speak:setup` | Install local NeMo models for transcription and neural voices. |
-| `/speak:telemetry` | Show or change the telemetry mode (`on`, `local`, `off`), print the install id, or keep your own recordings. |
-| `/speak:stats` | Show everything telemetry has collected on this machine. |
+| `/walkie:talk` | Speak your next prompt instead of typing it |
+| `/walkie:converse` | Talk with the agent for the rest of the session |
+| `/walkie:setup` | Install NeMo-Speech.cpp and the models |
+| `/walkie:telemetry [on\|local\|off\|--id\|notice\|record on\|record off]` | Show or change the telemetry setting |
+| `/walkie:stats` | What walkie has recorded about your own use |
 
----
+## Settings
 
-## Configuration
+Environment variables, read when the server starts:
 
-Customize settings via environment variables or in `.mcp.json`:
-
-| Setting | Default | Description |
+| Setting | Default | |
 |---|---|---|
-| `SPEAK_TRANSCRIBE_DIR` | input file dir | Destination folder for generated transcript files. |
-| `NEMO_HTTP_URL` | `http://127.0.0.1:8082` | Where the local speech server listens. Server settings have no plugin prefix because the server is shared. |
-| `NEMO_BIN` | `nemo-speech` | The speech server binary, when it is not on `PATH`. |
-| `NEMO_AUTOSTART` | `1` | Set to `0` to run the speech server yourself. |
-| `NEMO_TTS_SEED` | unset | Pins the neural voice's timbre across server restarts. |
-| `SPEAK_ENGINE` | `say` | Speech output engine: `say` (macOS native), `nemo` (neural local server), or `command`. |
-| `SPEAK_VOICE` | system voice | Active voice name (or `random` for a new voice each session). |
-| `SPEAK_VOICE_POOL` | default pool | Comma-separated pool of voices used when `SPEAK_VOICE=random`. |
-| `SPEAK_RATE` | system rate | Playback speed in words per minute (macOS default is ~175). |
-| `SPEAK_MAX_CHARS` | `400` | Maximum character length cap per spoken sentence. |
-| `SPEAK_INPUT_DEVICE` | system default | Pin a specific microphone input by name. |
-| `SPEAK_LISTEN_SILENCE_MS` | `3000` | Milliseconds of silence before recording automatically stops. |
-| `SPEAK_LISTEN_MAX_SECONDS` | `240` | Maximum recording duration in seconds. |
-| `SPEAK_LISTEN_CUE` | `1` | Set to `0` to mute start and stop microphone chimes. |
+| `WALKIE_ENGINE` | `say` | `say` (macOS), `nemo` (the neural voice) or `command` |
+| `WALKIE_VOICE` | engine default | a voice name, or `random` for a new one each session |
+| `WALKIE_VOICE_POOL` | the engine's pool | comma-separated voices `random` draws from |
+| `WALKIE_RATE` | engine default | words per minute, for engines that take one |
+| `WALKIE_MAX_CHARS` | `400` | longest sentence spoken, cut at a word |
+| `WALKIE_COMMAND` | unset | the program `WALKIE_ENGINE=command` runs, with the sentence as its last argument |
+| `WALKIE_INPUT_DEVICE` | system default | the microphone to record from, by name |
+| `WALKIE_LISTEN_SILENCE_MS` | `3000` | silence that ends a recording |
+| `WALKIE_LISTEN_MAX_SECONDS` | `240` | longest recording |
+| `WALKIE_LISTEN_TIMEOUT` | `10` | seconds to wait for you to start talking |
+| `WALKIE_LISTEN_LANGUAGE` | detected | language code of what you say, e.g. `en` |
+| `WALKIE_LISTEN_CUE` | `1` | `0` to mute the microphone chimes |
+| `WALKIE_LISTEN_CUE_START`, `_END`, `_EMPTY` | built-in sounds | your own chime files |
+| `WALKIE_UV` | found on `PATH` or in a standard location | full path to `uv`, used by the launchers |
+| `WALKIE_STATE_DIR` | `~/Library/Caches/walkie` | the microphone lock and the local telemetry store |
+| `NEMO_HTTP_URL` | `http://127.0.0.1:8082` | the shared speech server |
+| `NEMO_API_KEY` | unset | sent to the speech server when it needs one |
+| `NEMO_BIN` | `nemo-speech` | the server binary, when it is not on `PATH` |
+| `NEMO_AUTOSTART` | `1` | `0` to run the speech server yourself |
+| `NEMO_TTS_SEED` | unset | pins each voice's timbre across server restarts |
 
-### Speech Engines
+`NEMO_*` settings are shared with voicebox: whichever plugin starts the speech server
+decides its arguments for both, so keep them identical.
 
-- **`say`** (default on macOS): Instant playback with zero setup using Apple's built-in speech synthesizer.
-- **`nemo`**: High-quality neural voice (MagpieTTS) and streaming speech recognition (Nemotron-3.5). Runs locally with Metal/CUDA acceleration.
-- **`command`**: Route speech output through a custom command line (Piper, espeak-ng, etc.):
-  ```bash
-  SPEAK_ENGINE=command SPEAK_COMMAND="piper --model en_US.onnx"
-  ```
+## Privacy and telemetry
 
----
+Audio, transcripts and what the agent says never leave your machine. walkie reports
+anonymous usage data — which features are used, how long speech and listening take on
+which hardware, and why they fail — once you have seen its notice.
+`/walkie:telemetry off` stops it (an anonymous install count is still sent);
+`DO_NOT_TRACK=1` stops everything. Every field is listed in [TELEMETRY.md](TELEMETRY.md).
 
-## Privacy & Telemetry
+## Voice tuning
 
-- **100% On-Device Audio**: All speech synthesis, microphone recordings, and file transcriptions run entirely on your hardware. Audio, transcripts, and file names never leave your machine.
-- **Anonymous Metrics**: By default, anonymous event counts and execution timings are shared to track engine stability. No text, audio, file paths, or personal identifiers are ever collected. See [`TELEMETRY.md`](TELEMETRY.md) for complete details.
-- **Opt-Out**: Run `/speak:telemetry off` to stop collecting and sending usage data; the anonymous install ping still goes. Set `DO_NOT_TRACK=1` to send nothing at all. `/speak:stats` shows what this machine has collected.
+[voice-tuning/](voice-tuning/README.md) records a personal dataset on your own microphone
+and fine-tunes the recognition model on your voice.
 
----
+## Development
 
-## Developer Guide
+    uv sync
+    uv run pytest
+    uv run ruff check .
+    uv run mypy
+    scripts/install-local.sh    # copy this checkout over the installed plugin; restart Claude Code
 
-```bash
-uv sync                  # Install dependencies
-uv run pytest            # Run the test suite (offline tests)
-uv run ruff check .      # Lint checks
-uv run mypy              # Type checks
-scripts/install-local.sh # Sync changes into Claude Code's plugin cache
-```
-
-The speech engine is the speak-core git dependency; see `harness/design-guidelines.md` to work on both.
-
----
-
-## Documentation Index
-
-- **[Codebase Layout](harness/layout.md)**: File-by-file map of all modules and scripts.
-- **[Agents Operating Rules](AGENTS.md)**: Operating rules and standards for AI coding assistants.
-- **[Privacy & Telemetry Specification](TELEMETRY.md)**: Detailed disclosure of telemetry fields and opt-out commands.
-- **[Voice Tuning Guide](voice-tuning/README.md)**: Guide to recording a personal dataset and fine-tuning recognition.
-- **[Architecture](harness/architecture.md)**: System design, component boundaries, and design decisions.
-- **[User Flow & State Machines](harness/user-flow.md)**: Playback lifecycle, silence tracking, and input selection.
-- **[Performance & Benchmarks](harness/performance.md)**: Latency, resident memory, and disk footprint measurements.
-- **[Integration Guide](harness/integration.md)**: How to integrate the local speech stack into other agents or scripts.
-- **[Design Guidelines](harness/design-guidelines.md)**: Development conventions, error handling, and testing practices.
+The speech engine is [speak-core](https://github.com/danilogr/speak-core), a git
+dependency. Operating rules are in [AGENTS.md](AGENTS.md); design in
+[harness/architecture.md](harness/architecture.md), flows in
+[harness/user-flow.md](harness/user-flow.md), measurements in
+[harness/performance.md](harness/performance.md), conventions in
+[harness/design-guidelines.md](harness/design-guidelines.md), the file map in
+[harness/layout.md](harness/layout.md), and building the speech stack into another agent
+in [harness/integration.md](harness/integration.md).

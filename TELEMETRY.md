@@ -1,155 +1,139 @@
 # Telemetry
 
-`speak` reports anonymous usage data so its author can tell where to spend effort next.
-It is on by default. Turning it off takes one command and no account.
+walkie reports anonymous usage data so its author can tell where to spend effort. It is
+on by default, starts only after you have been shown a one-time notice, and turning it
+off takes one command and no account.
 
-```text
-/speak:telemetry off     # collect nothing, send nothing but the install ping
-/speak:telemetry local   # collect on this machine, send nothing but the install ping
-/speak:telemetry on      # the default
-/speak:telemetry         # show the current mode
-/speak:stats             # see everything this machine has collected
-```
+    /walkie:telemetry off      collect nothing; send only an anonymous install count
+    /walkie:telemetry local    keep the data on this machine; send only that count
+    /walkie:telemetry on       the default
+    /walkie:telemetry          show the current setting
+    /walkie:stats              see everything this machine has recorded
 
-From a terminal, `uv run` against the plugin's directory runs the same commands:
-
-```bash
-uv run --directory <plugin directory> speak-telemetry off
-uv run --directory <plugin directory> speak-stats
-```
-
-`SPEAK_TELEMETRY` set to `off` or `local` in your environment lowers the mode for this
-tool alone, while it is set. It never raises it: `SPEAK_TELEMETRY=on` does not undo an
-`off` you chose with the command. `DO_NOT_TRACK=1` goes further: nothing is collected and
-**nothing at all is sent**, not even the install ping, with no configuration needed.
+Outside Claude Code the same commands are `uv run --directory <plugin folder>
+walkie-telemetry off|local|on` and `… walkie-stats`. `WALKIE_TELEMETRY=off` or `local` in
+the environment lowers the setting for that process alone; it can never raise it above
+what you chose. `DO_NOT_TRACK=1` goes further: nothing is collected and nothing at all is
+sent, not even the install count.
 
 ## What it is for
 
 Three questions, and nothing beyond them:
 
-- **Is the neural voice worth its gigabyte on the machines people actually run?** Or is
-  the built-in `say` carrying most sessions?
-- **Which host is this running under?** Claude Code is not the only thing that speaks MCP,
-  and effort should follow the users who exist rather than the ones assumed.
-- **Do people keep using voice input, or try it once?** And when they interrupt, what kind
-  of sentence were they cutting off?
+1. **Is the neural voice worth its gigabyte on the machines people actually run?** Or is
+   the built-in `say` carrying most sessions?
+2. **Which host is this running under?** Claude Code is not the only thing that speaks
+   MCP, and effort should follow the users who exist.
+3. **Do people keep using voice input, or try it once?** And when they interrupt, what
+   kind of sentence were they cutting off?
 
-## The install ping
+## The notice
 
-One request when the plugin first runs on a machine, and one when a new version first
-runs. It is sent whether telemetry is `on`, `local` or `off`, so that installs can be
-counted at all. It carries exactly three fields:
+The first time walkie could send anything, it shows this, once (and `/walkie:setup`
+prints it too). Until it has been shown, walkie records nothing and sends nothing.
+`/walkie:talk` never shows it, because what it prints becomes your prompt.
 
-| Field | Example | Why |
-|---|---|---|
-| `plugin_version` | `1.7.0` | which releases are installed |
-| `os` | `darwin` | which platforms to support |
-| `event` | `install` or `upgrade` | new installs apart from upgrades |
+    walkie collects anonymous usage data: which features you use, how long speech
+    and listening take on your machine, and why they fail. It never sends what you or
+    the agent say, or any audio; the text of what was spoken and heard stays in walkie's
+    store on this machine (see /walkie:stats).
 
-There is no install id or any other identifier in it, so two pings cannot be linked to
-each other or to the rest of this page's data. It says the same thing in every mode, so
-it does not reveal whether you turned telemetry off. The server adds one to a daily
-count per version, OS, event and country, and keeps nothing per request.
+      /walkie:telemetry off     collect nothing; send only an anonymous install count
+      /walkie:telemetry local   keep the data; send only an anonymous install count
+      /walkie:stats             see your own
 
-The only thing kept on your machine is `ping.json` beside the telemetry config, holding
-the last version pinged. Under `DO_NOT_TRACK` the ping is never sent and that file is
-never written.
+    Details: https://github.com/danilogr/walkie/blob/main/TELEMETRY.md
+
+## The install count
+
+One request when walkie first runs on a machine and one when a new version first runs,
+in every setting except `DO_NOT_TRACK`, so that installs can be counted at all. It
+carries exactly `plugin_version` (`1.0.0`), `os` (`darwin`) and `event` (`install` or
+`upgrade`): no identifier, so two of them cannot be linked to each other or to anything
+else, and nothing that says whether you turned telemetry off. The server adds one to a
+daily count per version, OS, event and country and keeps nothing per request. Only
+`ping.json`, holding the last version counted, is kept on your machine.
 
 ## What is sent
 
-With telemetry `on`, and only then: counts, timings and fixed vocabularies. Every field, exhaustively — this table is the whole
-of it, and the machine-checked version is `contract/v1/schema.remote.sql` in the
-[speak-telemetry](https://github.com/danilogr/speak-telemetry) repo, which is the only
-schema the server will accept.
+With telemetry `on`, and only then: counts, timings and fixed vocabularies. This is every
+field; the machine-checked version is `contract/v1/schema.remote.sql` in the
+speak-telemetry repository, the only schema the server accepts.
 
-**Once per install**
+**Once per install:** a random `install_id`; `first_seen_at` and `last_seen_at`;
+`plugin_version`; `disclosure_ver` (which version of this page you were shown);
+`language`, `timezone` and `utc_offset_min` (the current UTC offset); `os`, `os_version` (major and minor
+only) and `arch`; `cpu_model`, `cpu_count`, `ram_gb` (bucketed: 8, 16, 32, 64 or 128);
+`accel` and `accel_name` (Metal, CUDA, ROCm or none). `country` is added by the server
+from the network edge; your machine never sends it.
 
-| Field | Example | Why |
-|---|---|---|
-| `install_id` | a random UUID | tells a heavy user from many light ones |
-| `plugin_version` | `1.3.0` | which releases are in use |
-| `country` | `US` | derived at the network edge, never sent by your machine |
-| `language`, `timezone`, `utc_offset_min` | `en-US`, `America/New_York`, `-240` | which languages to support; the offset is the current one, so it follows daylight saving |
-| `os`, `os_version`, `arch` | `darwin`, `25.6`, `arm64` | major/minor only, never the patch |
-| `cpu_model`, `cpu_count`, `ram_gb` | `Apple M5`, `10`, `32` | RAM is bucketed, never exact |
-| `accel`, `accel_name` | `metal` | whether local models could use acceleration |
+**Once per session** (one per MCP server process, and one per `/walkie:talk`):
+`session_id`, `install_id`, `started_at`, `ended_at`; `plugin_version`; `tts_engine` (`say`, `nemo` or
+`command`); `asr_engine` (always `nemo`) and `listen_enabled` (always true); `harness`
+and `harness_version` (Claude Code, Antigravity, …).
 
-**Once per session**
+**Once per sentence spoken or heard:**
 
-| Field | Why |
+| Field | What it says |
 |---|---|
-| `session_id`, `started_at`, `ended_at` | how long sessions run |
-| `tts_engine`, `asr_engine` | which engine is configured; `asr_engine` is always `nemo` (`listen_enabled` is retained but always true) |
-| `harness`, `harness_version` | which host is driving the plugin |
+| `utterance_id`, `install_id`, `session_id`, `seq`, `direction`, `source`, `occurred_at` | a random id per row, and the back-and-forth: the agent speaking (`speak`) or you being heard (`listen`, `talk`), in order, and when each ended |
+| `engine`, `model` | what did the work: the engine that actually spoke (a sentence `say` spoke while the neural server was down says `say`), and `magpie` or `nemotron-3.5` |
+| `voice` | a voice walkie's engines ship, or `custom` for any other name |
+| `device_kind` | the kind of microphone: built-in, USB, Bluetooth, virtual or unknown — never its name |
+| `intent` | why the agent spoke: a finished task, a blocker, a question, a recap, … |
+| `words`, `chars`, `audio_ms` | how much was said, never what |
+| `queue_wait_ms`, `synth_ms`, `play_ms`, `asr_ms` | where the time went |
+| `status` | `ok`, `interrupted`, `discarded`, `failed`, `refused` or `heard_nothing` |
 
-A session is sent when it starts, even if nothing is said in it, and sent again with its
-`ended_at` by the next session.
-
-**Once per sentence spoken or heard**
-
-| Field | Why |
-|---|---|
-| `seq`, `direction`, `occurred_at` | reconstructs the back-and-forth of a conversation; `occurred_at` is when the sentence finished playing, or its transcription finished |
-| `engine`, `model`, `voice`, `device_kind` | what produced it: the engine that actually spoke, so a sentence the built-in voice spoke because the neural server was down says `say`; `voice` is a voice name the plugin ships, or `custom` for any other; `device_kind` is a category, never a device name |
-| `intent` | what kind of sentence it was — a question, a recap, a finished task |
-| `words`, `chars`, `audio_ms` | how much was said, never *what* |
-| `queue_wait_ms`, `synth_ms`, `play_ms`, `asr_ms` | where the time goes: `queue_wait_ms` is the wait behind other sentences before synthesis started; `synth_ms` is synthesis, which `say` and custom commands do inside `play_ms` instead |
-| `status` | `ok`, `interrupted` (cut off while playing), `discarded` (dropped before it played), `failed`, `refused`, or `heard_nothing` |
-| `source_bytes`, `audio_codec`, `converted`, `diarize`, `format` | the shape of a transcribed file — its size, codec, whether it was converted, whether speakers were labelled, and the output format. Only on `transcribe` rows. Never the file's name, its path, or what was said |
+The contract also has five fields for transcribed files (`source_bytes`, `audio_codec`,
+`converted`, `diarize`, `format`); walkie transcribes no files and never sends them.
 
 ## What is never sent
 
-**Not what you said. Not what Claude said. Not any audio.**
+**Not what you said. Not what the agent said. Not any audio.** Also never: file names or
+paths, repository or project names, environment variables, hostnames, usernames, your IP
+address, the name of your microphone, or free text of any kind.
 
-Also never: file paths, repository or project names, environment variables, hostnames,
-usernames, your IP address, the name of your microphone, or any free text of any kind.
-
-This is not a promise, it is a property of the design. The server's schema has no column
-for any of it. The client keeps a richer local database — including transcripts, if you
-turn on recording — and what uploads is that table *with the content columns removed*. A
-build step derives the server schema from the local one by stripping every column tagged
-`-- LOCAL`, and a test fails if the two drift apart. An untagged new column breaks the
-build rather than quietly shipping.
-
-Run `SPEAK_TELEMETRY_DEBUG=1` and the plugin prints exactly what it would send, the ping
-included, instead of sending it.
+This is a property of the design, not a promise. walkie keeps a richer local database
+(`~/Library/Caches/walkie/telemetry.db`): it also holds the text of each sentence spoken
+and heard, a hash of each, your microphone's name and, if you keep recordings, where each
+recording is and its hash, so that `/walkie:stats` can show you your own. What uploads is
+that table **with those columns removed**: the server's schema is derived from the local
+one by stripping every column tagged `-- LOCAL` (`text`, `text_sha256`, `audio_path`,
+`audio_sha256`, `device_name`, the three correction columns, and the bookkeeping columns
+`shipped_at` and `rejected_at`), and a test fails if the two drift apart.
+`WALKIE_TELEMETRY_DEBUG=1` prints exactly what would be sent, the install count included,
+instead of sending it.
 
 ## Keeping your own recordings
 
 Separate, and off by default:
 
-```text
-/speak:telemetry record on
-```
+    /walkie:telemetry record on
 
-This keeps the audio of what **you** say on your own computer, so you can later improve
-speech recognition for your own voice. **Recordings never leave your machine** under any
-setting, and they use real disk space. `/speak:telemetry record off` stops it.
+This keeps the audio of what **you** say, in `~/Library/Application Support/walkie/recordings/`,
+so you can later tune recognition to your own voice (see `voice-tuning/`). Recordings are
+kept only while telemetry collects (`on` or `local`), **never leave your machine** under
+any setting, and use real disk space. `/walkie:telemetry record off` stops it.
 
-## Where it goes, and for how long
+## Where it goes
 
 To `speak-telemetry.actionableintelligence.app`, a Cloudflare Worker, into a database
-Danilo Gasques controls. Not shared, not sold, not fed to advertising.
-
-Your IP address reaches Cloudflare, as it does for any website. It is used once to
-rate-limit abuse and discarded in the same request; only the two-letter country is kept.
+Danilo Gasques controls. Not shared, not sold, not used for advertising. Your IP address
+reaches Cloudflare as it does for any website; the server never writes it to its
+database: it is used for rate limiting and discarded, and only the two-letter country is
+kept. Each install sends at most about 100 rows a day; past that, rows are dropped by the
+server, not retried.
 
 ## Deleting your data
 
-There is deliberately **no delete API** — an erasure endpoint on a public server is a
-standing invitation to erase other people's data.
-
-Email **danilo@gasqu.es** with your install id, which `/speak:telemetry --id` prints, and it
-will be deleted.
-
-That id is also the only thing that connects these rows to you. Nothing here records who
-you are, so without it, this data cannot be traced to a person — which is why the request
-has to carry it. Under GDPR Article 11 a controller who cannot identify you is not
-required to start collecting information in order to, and your rights attach when you
-supply the identifier yourself.
+There is deliberately no delete API — an erasure endpoint on a public server invites
+erasing other people's data. Email **danilo@gasqu.es** with your install id, which
+`/walkie:telemetry --id` prints, and it will be deleted. That id is the only thing
+connecting these rows to you, which is why the request has to carry it.
 
 ## Changing your mind
 
-Nothing is retroactive in either direction. Turning telemetry off stops future sends
-other than the install ping; it does not delete what has already arrived — email for that. Turning it back on does not
-send a backlog older than what is still in the local database.
+Nothing is retroactive. Turning telemetry off stops future sends other than the install
+count; it does not delete what has arrived — email for that. Turning it back on sends
+only what is still in the local database.

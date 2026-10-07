@@ -1,4 +1,4 @@
-# Performance
+# <img src="../assets/walkie-detailed.svg" width="28" height="28" alt="" valign="middle" /> Performance
 
 > Measured figures and the hardware they came from. Update when a measurement is
 > retaken or a default changes because of one. Decisions that rest on these numbers
@@ -58,11 +58,12 @@ Both grow in use, and not by the same amount:
 
 This is the cost behind sharing one server across every Claude Code window rather
 than starting one per session, and behind stopping it when the last session leaves.
+voicebox, when installed, uses the same server rather than a second one.
 
 ## Disk
 
 The two models together are **1.4 GB**: MagpieTTS v2607 at 640 MB with its codec and
-the `nemotron-3.5-asr-streaming-0.6b` q8_0 transcription model at 707 MB. `/speak:setup`
+the `nemotron-3.5-asr-streaming-0.6b` q8_0 transcription model at 707 MB. `/walkie:setup`
 pulls both, because the same server serves speech and transcription. The model cache
 is keyed by revision, so an install upgraded from 0.1.0 also keeps the v2602 MagpieTTS
 file (447 MB) until it is deleted by hand.
@@ -79,7 +80,7 @@ On NeMo-Speech.cpp 0.2.0 with the plugin's own server flags (voice `John`,
 
 Transcription of a 4 s clip took 0.06 s warm on Metal. Hence `--device auto`, which
 is Metal on Apple silicon; see the decision record in `architecture.md`. Below 0.2.0,
-Metal synthesis on an M5 is silence, which is why `install-nemo.sh` requires 0.2.0.
+Metal synthesis on an M5 is silence, which is why `speak-core-setup` requires 0.2.0.
 
 A machine with neither Metal nor CUDA falls back to CPU under `auto`. Only the M5's
 CPU has been measured, but at that speed most sentences outrun `DEFAULT_TIMEOUT`
