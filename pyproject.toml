@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Talk with your coding agent: spoken status lines, dictation and conversation, on NVIDIA NeMo-Speech.cpp."
 requires-python = ">=3.12"
 dependencies = [
-    "speak-core @ git+https://github.com/danilogr/speak-core@9dd9d353b31225636e90dcd1f4bfc07dac089e95",
+    "speak-core @ git+https://github.com/danilogr/speak-core@v0.4.0",
     "mcp>=2.1,<3",
     "sounddevice>=0.5.6",
 ]
