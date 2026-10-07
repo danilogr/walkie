@@ -1,12 +1,12 @@
-"""`speak-stats`: plain SQL over the raw tables, rendered as text."""
+"""`walkie-stats`: plain SQL over the raw tables, rendered as text."""
 
 from pathlib import Path
 
 import pytest
 from speak_core.telemetry import store
 
-from speak.telemetry import commands, stats
-from speak.telemetry.contract import SCHEMA
+from walkie.telemetry import commands, stats
+from walkie.telemetry.contract import SCHEMA
 
 INSTALL = {
     "install_id": "install-1",

@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SENTENCES = HERE / "sentences.txt"
-DEFAULT_OUT = Path.home() / "speak-voice-dataset"
+DEFAULT_OUT = Path.home() / "walkie-voice-dataset"
 DEFAULT_TAKES = 3
 SAMPLE_RATE = 16_000  # what the Nemotron and Parakeet recognisers expect
 HOLD_OUT_EVERY = 10
@@ -95,7 +95,7 @@ def build_manifests(out: Path, sentences: Sequence[str]) -> tuple[int, int]:
 
 def resolve_device(flag: str | None, env: Mapping[str, str]) -> str | None:
     """The microphone to record from: the flag, else the one the plugin is pinned to."""
-    return flag or env.get("SPEAK_INPUT_DEVICE") or None
+    return flag or env.get("WALKIE_INPUT_DEVICE") or None
 
 
 def list_devices() -> list[str]:
@@ -183,7 +183,7 @@ def record(device: str, out: Path, takes: int, sentences: Sequence[str]) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Record a voice dataset for fine-tuning.")
-    parser.add_argument("--device", help="microphone name (default: $SPEAK_INPUT_DEVICE)")
+    parser.add_argument("--device", help="microphone name (default: $WALKIE_INPUT_DEVICE)")
     parser.add_argument("--takes", type=int, default=DEFAULT_TAKES, help="takes per sentence")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="dataset folder")
     parser.add_argument("--list-devices", action="store_true", help="list microphones and exit")
@@ -211,7 +211,7 @@ def main() -> int:
         device = resolve_device(args.device, os.environ)
         if device is None:
             print("Name the microphone you speak into every day, with --device or")
-            print("SPEAK_INPUT_DEVICE. Recording on another one costs much of the benefit.\n")
+            print("WALKIE_INPUT_DEVICE. Recording on another one costs much of the benefit.\n")
             print("\n".join(f"  {name}" for name in devices))
             return 2
         if device not in devices:

@@ -3,8 +3,8 @@
 import random
 
 from fakes import FakeEngine, FakeQueue
-from speak.server import choose_pool, create_server
-from speak.settings import Settings
+from walkie.config import Settings
+from walkie.server import choose_pool, create_server
 
 SAY_LIKE = ["Samantha", "Karen", "Zarvox", "Bubbles", "Albert"]
 CURATED = ("Samantha", "Karen", "Moira")
@@ -57,7 +57,7 @@ def test_nothing_reported_and_no_pool_means_no_choice():
 
 async def test_random_never_reaches_the_engine_as_a_literal_voice_name():
     queue = FakeQueue()
-    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"SPEAK_VOICE": "random"})
+    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"WALKIE_VOICE": "random"})
     await call(server, "speak", text="hi")
     assert queue.enqueued[0][1] != "random"
 
@@ -65,7 +65,7 @@ async def test_random_never_reaches_the_engine_as_a_literal_voice_name():
 async def test_a_random_session_voice_comes_from_the_engine_pool():
     queue = FakeQueue()
     engine = FakeEngine(voices=SAY_LIKE, random_pool=CURATED)
-    server = build(engine=engine, queue=queue, env={"SPEAK_VOICE": "random"})
+    server = build(engine=engine, queue=queue, env={"WALKIE_VOICE": "random"})
     await call(server, "speak", text="hi")
     assert queue.enqueued[0][1] in ("Samantha", "Karen")
 
@@ -76,7 +76,7 @@ async def test_a_configured_pool_overrides_the_engine_pool():
     server = build(
         engine=engine,
         queue=queue,
-        env={"SPEAK_VOICE": "random", "SPEAK_VOICE_POOL": "Zarvox,Bubbles"},
+        env={"WALKIE_VOICE": "random", "WALKIE_VOICE_POOL": "Zarvox,Bubbles"},
     )
     await call(server, "speak", text="hi")
     assert queue.enqueued[0][1] in ("Zarvox", "Bubbles")
@@ -84,7 +84,7 @@ async def test_a_configured_pool_overrides_the_engine_pool():
 
 async def test_the_chosen_voice_sticks_for_the_whole_session():
     queue = FakeQueue()
-    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"SPEAK_VOICE": "random"})
+    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"WALKIE_VOICE": "random"})
     await call(server, "speak", text="one")
     await call(server, "speak", text="two")
     await call(server, "speak", text="three")
@@ -96,7 +96,7 @@ async def test_a_cold_engine_speaks_with_the_default_and_resolves_later():
     """nemo reports no voices until its server is up; the sentence still goes out."""
     queue = FakeQueue()
     engine = FakeEngine(voices=[])
-    server = build(engine=engine, queue=queue, env={"SPEAK_VOICE": "random"})
+    server = build(engine=engine, queue=queue, env={"WALKIE_VOICE": "random"})
 
     await call(server, "speak", text="cold")
     assert queue.enqueued[0][1] is None
@@ -108,7 +108,7 @@ async def test_a_cold_engine_speaks_with_the_default_and_resolves_later():
 
 async def test_set_voice_overrides_a_random_pick():
     queue = FakeQueue()
-    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"SPEAK_VOICE": "random"})
+    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"WALKIE_VOICE": "random"})
     await call(server, "speak", text="one")
     await call(server, "set_voice", voice="Karen")
     await call(server, "speak", text="two")
@@ -117,20 +117,22 @@ async def test_set_voice_overrides_a_random_pick():
 
 async def test_list_voices_reports_the_voice_that_was_rolled():
     engine = FakeEngine(voices=SAY_LIKE, random_pool=CURATED)
-    server = build(engine=engine, env={"SPEAK_VOICE": "random"})
+    server = build(engine=engine, env={"WALKIE_VOICE": "random"})
     message = await call(server, "list_voices")
     assert "active voice: Samantha" in message or "active voice: Karen" in message
 
 
 async def test_a_pinned_voice_is_still_pinned():
     queue = FakeQueue()
-    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"SPEAK_VOICE": "Samantha"})
+    server = build(
+        engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"WALKIE_VOICE": "Samantha"}
+    )
     await call(server, "speak", text="hi")
     assert queue.enqueued[0][1] == "Samantha"
 
 
 async def test_an_explicit_voice_argument_still_wins_over_the_random_pick():
     queue = FakeQueue()
-    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"SPEAK_VOICE": "random"})
+    server = build(engine=FakeEngine(voices=SAY_LIKE), queue=queue, env={"WALKIE_VOICE": "random"})
     await call(server, "speak", text="hi", voice="Zarvox")
     assert queue.enqueued[0][1] == "Zarvox"

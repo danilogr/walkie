@@ -3,10 +3,10 @@
 import asyncio
 
 from fakes import FakeMicLock, FakeRecorder, FakeSupervisor, FakeTranscriber
-from speak import server as server_module
-from speak.capture import Recording, State, TrackerSettings
-from speak.cue import Cue
-from speak.server import Ears, SessionState, settle, shutdown, start_listening
+from walkie import server as server_module
+from walkie.capture import Recording, State, TrackerSettings
+from walkie.cue import Cue
+from walkie.server import Ears, SessionState, settle, shutdown, start_listening
 
 
 class RecordingQueue:

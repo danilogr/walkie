@@ -16,7 +16,7 @@ from pathlib import Path
 RATE = 44_100
 PEAK = 0.42  # a cue should be audible, not startling
 
-OUT = Path(__file__).resolve().parent.parent / "src" / "speak" / "assets"
+OUT = Path(__file__).resolve().parent.parent / "src" / "walkie" / "assets"
 
 
 def tone(

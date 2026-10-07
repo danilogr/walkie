@@ -7,7 +7,7 @@ import pytest
 from speak_core.player import Player
 
 from fakes import FakePlayer
-from speak.cue import EMPTY_SOUND, END_SOUND, START_SOUND, Cue
+from walkie.cue import EMPTY_SOUND, END_SOUND, START_SOUND, Cue
 
 START = Path("/sounds/cue-start.aiff")
 END = Path("/sounds/cue-end.aiff")
@@ -88,7 +88,7 @@ async def test_a_recording_that_failed_reports_the_failure_sound():
 async def test_a_missing_player_does_not_cost_the_recording(caplog):
     calls: list[str] = []
     player = FakePlayer(calls, error=FileNotFoundError(2, "No such file", PLAYER.binary))
-    with caplog.at_level(logging.DEBUG, logger="speak.cue"):
+    with caplog.at_level(logging.DEBUG, logger="walkie.cue"):
         async with build(player).around_recording():
             calls.append("record")
     assert calls == ["record"]
@@ -98,7 +98,7 @@ async def test_a_missing_player_does_not_cost_the_recording(caplog):
 async def test_a_player_that_exits_non_zero_does_not_cost_the_recording(caplog):
     """What a missing sound file looks like from here: `afplay` runs and fails."""
     calls: list[str] = []
-    with caplog.at_level(logging.DEBUG, logger="speak.cue"):
+    with caplog.at_level(logging.DEBUG, logger="walkie.cue"):
         async with build(FakePlayer(calls, code=1)).around_recording() as outcome:
             calls.append("record")
             outcome.heard = True
@@ -131,7 +131,7 @@ def test_the_shipped_cue_sounds_exist_and_are_playable_wav():
 async def test_a_machine_with_no_sound_player_still_records(monkeypatch):
     """A cue is a convenience and a recording is not. Patched at the resolver, because
     an unset player means "find one" rather than "there is none"."""
-    monkeypatch.setattr("speak.cue.resolve_player", lambda: None)
+    monkeypatch.setattr("walkie.cue.resolve_player", lambda: None)
     calls: list[str] = []
     spawner = FakePlayer(calls)
     cue = Cue(start=START, end=END, empty=EMPTY, spawn=spawner.spawn)

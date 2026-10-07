@@ -1,7 +1,7 @@
-"""`speak.__main__.build()` is the one thing no other test exercises directly: it
+"""`walkie.__main__.build()` is the one thing no other test exercises directly: it
 is what actually wires the queue's `on_finish` into a real `TelemetrySession` and
 hands one to `create_server`. A real subprocess is the only way to run its
-lifespan (which starts the queue's worker) the way `speak-mcp` really does, the
+lifespan (which starts the queue's worker) the way `walkie-mcp` really does, the
 same reason `tests/test_server.py` uses one.
 """
 
@@ -17,22 +17,22 @@ from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from speak_core.telemetry import store
 
-from speak.telemetry.contract import SCHEMA
+from walkie.telemetry.contract import SCHEMA
 
 
 def _env(state_dir: str, home: str) -> dict[str, str]:
     return {
         **os.environ,
-        "SPEAK_ENGINE": "command",
-        "SPEAK_COMMAND": "true",  # a no-op binary: silent, and hermetic like test_server.py
+        "WALKIE_ENGINE": "command",
+        "WALKIE_COMMAND": "true",  # a no-op binary: silent, and hermetic like test_server.py
         "NEMO_AUTOSTART": "0",
-        "SPEAK_STATE_DIR": state_dir,
+        "WALKIE_STATE_DIR": state_dir,
         "SPEAK_CORE_STATE_DIR": state_dir,
-        "SPEAK_TELEMETRY": "local",
+        "WALKIE_TELEMETRY": "local",
         # Collecting needs DO_NOT_TRACK cleared, which lets the install ping run;
         # debug turns it, and any shipping, into a log line instead of a request.
         "DO_NOT_TRACK": "",
-        "SPEAK_TELEMETRY_DEBUG": "1",
+        "WALKIE_TELEMETRY_DEBUG": "1",
         "HOME": home,
     }
 
@@ -41,7 +41,7 @@ def _env(state_dir: str, home: str) -> dict[str, str]:
 async def connected(state_dir: str, home: str, client_info: mcp_types.Implementation | None = None):
     parameters = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "speak"],
+        args=["-m", "walkie"],
         env=_env(state_dir, home),
         cwd=str(Path.cwd()),
     )
@@ -54,7 +54,7 @@ async def connected(state_dir: str, home: str, client_info: mcp_types.Implementa
 
 
 def _telemetry_db(home: Path) -> Path:
-    return home / "Library" / "Application Support" / "speak" / "telemetry.db"
+    return home / "Library" / "Application Support" / "walkie" / "telemetry.db"
 
 
 async def test_speaking_through_the_real_server_writes_a_local_row(tmp_path):
@@ -110,54 +110,6 @@ async def test_the_clients_own_client_info_overrides_the_environment_fallback(tm
         sessions = store.sessions_by_id(conn, [rows[0]["session_id"]])
         assert sessions[0]["harness"] == "gemini-cli"
         assert sessions[0]["harness_version"] == "1.2.3"
-    finally:
-        conn.close()
-
-
-async def test_transcribe_also_corrects_the_harness_from_client_info(tmp_path):
-    """`speak` proves the wiring above; `transcribe` calls `note_harness` too, and
-    nothing else covered it - a session whose only tool use was transcription must
-    not be left with the environment's guessed harness. A missing file is enough:
-    `note_harness` runs before `transcribe` even looks at the path."""
-    home = tmp_path / "home"
-    home.mkdir()
-
-    with tempfile.TemporaryDirectory() as state_dir:
-        async with connected(
-            state_dir,
-            str(home),
-            client_info=mcp_types.Implementation(name="Gemini CLI", version="1.2.3"),
-        ) as session:
-            await session.call_tool("transcribe", {"path": str(tmp_path / "missing.wav")})
-
-    conn = store.connect(_telemetry_db(home), SCHEMA)
-    try:
-        row = conn.execute("SELECT harness, harness_version FROM sessions").fetchone()
-        assert row["harness"] == "gemini-cli"
-        assert row["harness_version"] == "1.2.3"
-    finally:
-        conn.close()
-
-
-async def test_transcription_status_also_corrects_the_harness_from_client_info(tmp_path):
-    """Same proof for the other transcription tool, exercised on its own so neither
-    depends on the other having run first."""
-    home = tmp_path / "home"
-    home.mkdir()
-
-    with tempfile.TemporaryDirectory() as state_dir:
-        async with connected(
-            state_dir,
-            str(home),
-            client_info=mcp_types.Implementation(name="Gemini CLI", version="1.2.3"),
-        ) as session:
-            await session.call_tool("transcription_status", {})
-
-    conn = store.connect(_telemetry_db(home), SCHEMA)
-    try:
-        row = conn.execute("SELECT harness, harness_version FROM sessions").fetchone()
-        assert row["harness"] == "gemini-cli"
-        assert row["harness_version"] == "1.2.3"
     finally:
         conn.close()
 

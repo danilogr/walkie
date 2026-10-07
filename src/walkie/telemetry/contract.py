@@ -1,4 +1,4 @@
-"""This plugin's telemetry contract as speak-core's store and shipper need it.
+"""walkie's telemetry contract as speak-core's store and shipper need it.
 
 The schema is `speak-telemetry`'s `contract/v1/schema.sql`, bundled. The column lists
 below must match it; `tests/telemetry/test_contract_schema.py` checks they do,
@@ -74,7 +74,7 @@ UTTERANCES = RowTable(
 )
 
 SCHEMA = TelemetrySchema(
-    sql=importlib.resources.files("speak.telemetry").joinpath("schema.sql").read_text(),
+    sql=importlib.resources.files("walkie.telemetry").joinpath("schema.sql").read_text(),
     session_columns=(
         "session_id",
         "install_id",
@@ -91,12 +91,12 @@ SCHEMA = TelemetrySchema(
     rows=UTTERANCES,
 )
 
-# Disclosure 2 is the first TELEMETRY.md that includes the install ping.
+# Disclosure 1 is walkie's first TELEMETRY.md and first-run notice.
 IDENTITY = TelemetryIdentity(
-    plugin="speak",
-    env_prefix="SPEAK",
+    plugin="walkie",
+    env_prefix="WALKIE",
     default_endpoint="https://speak-telemetry.actionableintelligence.app/v1/ingest",
-    disclosure_version=2,
+    disclosure_version=1,
 )
 
 DB_FILENAME = "telemetry.db"

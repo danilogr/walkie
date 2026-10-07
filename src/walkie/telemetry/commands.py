@@ -1,4 +1,4 @@
-"""This plugin's telemetry console scripts: `speak-telemetry` and `speak-stats`.
+"""walkie's telemetry console scripts: `walkie-telemetry` and `walkie-stats`.
 
 The only telemetry modules that read `os.environ` and `sys.argv`; everything they
 call takes them as arguments.
@@ -9,8 +9,8 @@ import sys
 
 from speak_core.telemetry import cli, report
 
-from speak.telemetry.contract import IDENTITY, SCHEMA, db_path
-from speak.telemetry.stats import render
+from walkie.telemetry.contract import IDENTITY, SCHEMA, db_path
+from walkie.telemetry.stats import render
 
 
 def telemetry_main() -> None:

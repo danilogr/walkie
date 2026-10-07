@@ -1,9 +1,9 @@
 """What both of this plugin's entry points build the same way for listening: the
 recording limits, the microphone, the cue, and the transcription timeout."""
 
-from speak.capture import MicrophoneRecorder, TrackerSettings
-from speak.cue import Cue
-from speak.settings import Settings
+from walkie.capture import MicrophoneRecorder, TrackerSettings
+from walkie.config import Settings
+from walkie.cue import Cue
 
 # Enough for the request itself on top of the audio. Transcription runs well above
 # realtime (see harness/performance.md), so a second of allowance per second of

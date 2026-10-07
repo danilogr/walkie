@@ -1,4 +1,4 @@
-"""The /talk entry point: record the user, transcribe, print the transcript.
+"""The /walkie:talk entry point: record the user, transcribe, print the transcript.
 
 stdout is this program's product - a slash command injects it into the prompt -
 so unlike the library modules, printing here is the point. Whatever lands there is
@@ -19,16 +19,16 @@ from speak_core.supervisor import NemoSupervisor, process_is_alive
 from speak_core.telemetry import ping as telemetry_ping
 from speak_core.telemetry import wiring as telemetry_wiring
 
-from speak.capture import Recorder, RecorderUnavailable, Recording, describe
-from speak.cue import Cue
-from speak.listening import build_cue, build_recorder, capture_limits, transcription_timeout
-from speak.miclock import MicLock, MicrophoneBusy
-from speak.server import VERSION
-from speak.settings import PLUGIN, Settings
-from speak.telemetry import compose as telemetry_compose
-from speak.telemetry.contract import IDENTITY
-from speak.telemetry.session import TelemetrySession
-from speak.tools import (
+from walkie.capture import Recorder, RecorderUnavailable, Recording, describe
+from walkie.config import PLUGIN, Settings
+from walkie.cue import Cue
+from walkie.listening import build_cue, build_recorder, capture_limits, transcription_timeout
+from walkie.miclock import MicLock, MicrophoneBusy
+from walkie.server import VERSION
+from walkie.telemetry import compose as telemetry_compose
+from walkie.telemetry.contract import IDENTITY
+from walkie.telemetry.session import TelemetrySession
+from walkie.tools import (
     NO_ASR,
     NO_SERVER,
     SERVER_STARTING,
@@ -69,7 +69,7 @@ async def capture(
     telemetry: TelemetrySession | None = None,
 ) -> str:
     """Record one utterance and return its transcript, or "" for silence."""
-    # Liveness before capability, the way `speak.server.listen` does it. `has_asr`
+    # Liveness before capability, the way `walkie.server.listen` does it. `has_asr`
     # answers False for any HTTP failure, so a server that is absent, or one this
     # process started eight seconds ago and is still loading, would be reported as a
     # server running without a transcription model — and both remedies that message
@@ -148,7 +148,7 @@ async def dictate(
     Every way this attempt can fail before `capture` takes over writes its `failed`
     row here; `capture` writes its own, so each attempt is recorded exactly once.
     """
-    # Register for this process's lifetime so a standalone /talk cannot leave a
+    # Register for this process's lifetime so a standalone /walkie:talk cannot leave a
     # gigabyte of speech server running behind it. When a Claude Code session is
     # already holding the server, release is a no-op and the server stays warm.
     try:
@@ -202,10 +202,10 @@ async def _start(supervisor: NemoSupervisor, transcriber: Transcriber) -> None:
 async def _run(settings: Settings) -> str:
     """Build the real collaborators and dictate against them.
 
-    `/talk` is its own short-lived process rather than an MCP session, so it gets
+    `/walkie:talk` is its own short-lived process rather than an MCP session, so it gets
     its own session row - and never ships: shipping is a network call, and this
     process's whole job is to print a transcript as fast as it can. Rows it writes
-    are shipped by the next `speak-mcp` session to start, since both read the same
+    are shipped by the next `walkie-mcp` session to start, since both read the same
     local store.
 
     The install ping is the one request it may make, because someone who only ever
@@ -261,14 +261,14 @@ async def _run(settings: Settings) -> str:
 def _fail(message: str) -> NoReturn:
     """Report one line, on both streams, and stop.
 
-    `commands/talk.md` tells Claude that a line beginning `speak:` is an error
+    `commands/talk.md` tells Claude that a line beginning `walkie:` is an error
     rather than the user's words, and it has to arrive for that to help. Whether a
     slash command's `!` injection carries stderr from a command that exited non-zero
     is not something this plugin controls, and if it does not, stderr alone leaves
     the model an empty transcript under an instruction to act on it as the user's
     request. The prefix is what keeps the stdout copy from being read as speech.
     """
-    line = f"speak: {message}"
+    line = f"walkie: {message}"
     print(line, file=sys.stderr)
     print(line)
     raise SystemExit(1)

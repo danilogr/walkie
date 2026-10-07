@@ -1,4 +1,4 @@
-"""The MCP server: the speech tools, and `listen` when voice input is on."""
+"""The MCP server: the speech tools, `listen`, and the `converse` prompt."""
 
 import asyncio
 import logging
@@ -21,17 +21,16 @@ from speak_core.queue import describe as describe_queue
 from speak_core.telemetry.wiring import normalize_harness
 from speak_core.text import normalize
 
-from speak import tools
-from speak.capture import Recorder, RecorderUnavailable, Recording, TrackerSettings, describe
-from speak.cue import Cue
-from speak.miclock import MicLock, MicrophoneBusy
-from speak.settings import Settings
-from speak.telemetry.session import TelemetrySession
-from speak.transcribe import service as transcription
+from walkie import tools
+from walkie.capture import Recorder, RecorderUnavailable, Recording, TrackerSettings, describe
+from walkie.config import Settings
+from walkie.cue import Cue
+from walkie.miclock import MicLock, MicrophoneBusy
+from walkie.telemetry.session import TelemetrySession
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.6.0"
+VERSION = "1.0.0"
 
 # The queue decides when it is wedged, because only it can see its own progress. This
 # is the outer guard: a Queue implementation that neither finishes nor raises would
@@ -173,7 +172,7 @@ async def start_listening(
 ) -> asyncio.Task[bool] | None:
     """Claim the shared speech server for a session that can listen.
 
-    `/talk` runs as its own short-lived process, so it needs a server that is
+    `/walkie:talk` runs as its own short-lived process, so it needs a server that is
     already warm. Registering is awaited; the warmup is handed back as a task the
     caller owns, so neither the liveness check nor a cold start delays the session
     opening. It is also recorded on the session, because the first `listen` of a
@@ -233,7 +232,6 @@ def create_server(
     rng: random.Random | None = None,
     ears: Ears | None = None,
     telemetry: TelemetrySession | None = None,
-    scribe: "transcription.Scribe | None" = None,
     on_session_start: Callable[[], None] | None = None,
 ) -> MCPServer:
     session = SessionState(
@@ -302,7 +300,7 @@ def create_server(
                 telemetry=telemetry,
             )
 
-    server = MCPServer(name="speak", version=VERSION, lifespan=lifespan)
+    server = MCPServer(name="walkie", version=VERSION, lifespan=lifespan)
 
     async def session_voice() -> str | None:
         """Resolve the session voice, rolling one the first time it is needed.
@@ -390,59 +388,6 @@ def create_server(
         if stats.size == 0:
             return f"nothing queued; {stats.finished} spoken so far"
         return f"{describe_queue(stats)}; {stats.finished} spoken so far"
-
-    if scribe is not None:
-        # The transcription lock is claimed for a worker that does not exist yet, so
-        # between this call returning and that worker taking the lock over the record
-        # still names this process; without this second gate a concurrent pair - which
-        # is what "transcribe these three recordings" produces - would interleave in
-        # that window. Refusing rather than queueing keeps the answer immediate: the
-        # call that loses the race gets the busy message from the lock itself.
-        transcribing = asyncio.Lock()
-
-        @server.tool(name="transcribe", description=tools.TRANSCRIBE)
-        async def transcribe(
-            path: Annotated[str, Field(description=tools.TRANSCRIBE_PATH)],
-            output_dir: Annotated[
-                str | None, Field(description=tools.TRANSCRIBE_OUTPUT_DIR)
-            ] = None,
-            format: Annotated[
-                tools.TranscriptFormat, Field(description=tools.TRANSCRIBE_FORMAT)
-            ] = "text",
-            diarize: Annotated[bool, Field(description=tools.TRANSCRIBE_DIARIZE)] = True,
-            language: Annotated[str | None, Field(description=tools.TRANSCRIBE_LANGUAGE)] = None,
-            translate_to: Annotated[
-                str | None, Field(description=tools.TRANSCRIBE_TRANSLATE)
-            ] = None,
-            *,
-            ctx: Context,
-        ) -> str:
-            note_harness(ctx)
-            if transcribing.locked():
-                return transcription.busy_message(scribe)
-            async with transcribing:
-                return await transcription.start(
-                    scribe,
-                    settings,
-                    transcription.TranscribeRequest(
-                        path=path,
-                        output_dir=output_dir,
-                        format=format,
-                        diarize=diarize,
-                        language=language,
-                        translate_to=translate_to,
-                    ),
-                    telemetry,
-                )
-
-        @server.tool(name="transcription_status", description=tools.TRANSCRIPTION_STATUS)
-        async def transcription_status(
-            job_id: Annotated[str | None, Field(description=tools.TRANSCRIPTION_JOB_ID)] = None,
-            *,
-            ctx: Context,
-        ) -> str:
-            note_harness(ctx)
-            return transcription.status(scribe, settings, job_id)
 
     if ears is not None:
         # The microphone lock is re-entrant by pid, so it separates sessions but not

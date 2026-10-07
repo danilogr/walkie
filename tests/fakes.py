@@ -8,8 +8,8 @@ from speak_core.engines.asr import Liveness
 from speak_core.engines.base import Utterance
 from speak_core.queue import QueueStats
 
-from speak.capture import Recording, TrackerSettings
-from speak.miclock import MicrophoneBusy
+from walkie.capture import Recording, TrackerSettings
+from walkie.miclock import MicrophoneBusy
 
 
 class FakeEngine:

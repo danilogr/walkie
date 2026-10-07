@@ -24,8 +24,6 @@ Intent = Literal[
 ]
 INTENT_VALUES: tuple[str, ...] = get_args(Intent)
 
-TranscriptFormat = Literal["text", "json", "srt", "vtt"]
-
 SPEAK = """Speak one short sentence aloud to the user through the speakers.
 
 Use it at the moments where a voice beats scrollback: when you have finished a task,
@@ -40,8 +38,8 @@ lookup, a one-line answer, or a question already on screen.
 
 Set intent to the reason above that applies: task_done, blocked, question, recap, or
 progress for the one case this tool asks you not to use. takeaway names an important
-finding said out loud, conversation is /speak:converse, narration is /speak:narrate
-reading a text aloud, and unspecified - the default - is for anything else. This is
+finding said out loud, conversation is /walkie:converse, narration is reading a long
+text aloud, and unspecified - the default - is for anything else. This is
 for measurement only and never changes what is said.
 
 Write one short sentence of plain spoken English - it is heard, not read.
@@ -94,10 +92,10 @@ NO_ASR = """The speech server is running without a transcription model, so there
 to listen with. A server's models are chosen when it starts and cannot change while it
 runs, so this one will not gain transcription on its own.
 
-Either the model was never downloaded - run /speak:setup to pull it - or this shared
+Either the model was never downloaded - run /walkie:setup to pull it - or this shared
 server was started by a session that had voice input switched off. It stops only when
 the last session using it exits, so restarting one session does not help while others
-are still attached: close the other Claude Code sessions using speak, or stop the
+are still attached: close the other Claude Code sessions using walkie or voicebox, or stop the
 server process recorded in server.json in the shared speak-core state directory. The next listen
 then starts one with transcription."""
 
@@ -115,13 +113,13 @@ SERVER_STARTING = (
 
 SERVER_UNREACHABLE = (
     "the speech server is not answering, so there is nothing to transcribe with. Run "
-    "/speak:setup if nemo-speech is not installed yet, check NEMO_HTTP_URL if it serves "
+    "/walkie:setup if nemo-speech is not installed yet, check NEMO_HTTP_URL if it serves "
     "somewhere other than the default port, and start it yourself if you set "
     "NEMO_AUTOSTART=0."
 )
 
 NO_SERVER = (
-    "could not start the speech server. Run /speak:setup to install nemo-speech and pull "
+    "could not start the speech server. Run /walkie:setup to install nemo-speech and pull "
     "the models, or set NEMO_BIN to it if it is installed somewhere else."
 )
 
@@ -131,42 +129,6 @@ ALREADY_LISTENING = (
 
 HEARD_NOTHING = "heard nothing"
 
-# The sentinel /talk prints when the recording held no speech. `commands/talk.md`
+# The sentinel /walkie:talk prints when the recording held no speech. `commands/talk.md`
 # branches on this exact line, so it lives here rather than as a literal in both.
 TALK_HEARD_NOTHING = f"({HEARD_NOTHING})"
-
-TRANSCRIBE = """Transcribe an audio or video file to text on this machine, with the local
-NeMo speech model. Use this whenever the user asks to transcribe a recording,
-meeting, interview, voice memo or video - instead of Whisper, a cloud speech API,
-or writing a script to do it. Nothing leaves the machine.
-
-It starts a background job and returns at once with a job id, the path the
-transcript will be written to, and an estimate: roughly a minute of work for every
-seven minutes of audio. Check on it with transcription_status. Speakers are
-labelled by default; turn diarize off for a single speaker to save about a
-quarter of the time. Only one transcription runs at a time.
-
-The transcript is written to a file, not returned. Read the file only when you
-need more than the preview transcription_status gives."""
-
-TRANSCRIPTION_STATUS = """Report on transcription jobs started with transcribe. With a job id,
-that job: still running and how long it has left, finished with its output path
-and a short preview, or failed with the reason. Without one, the recent jobs.
-
-The preview is the first few hundred characters; read the output file for the
-rest."""
-
-TRANSCRIBE_PATH = (
-    "The absolute path to the audio or video file to transcribe. The MCP server's "
-    "working directory is the plugin's own root, not the user's project, so a "
-    "relative path resolves somewhere unexpected."
-)
-TRANSCRIBE_OUTPUT_DIR = (
-    "Directory for the transcript. Defaults to SPEAK_TRANSCRIBE_DIR if set, "
-    "otherwise the input file's own directory."
-)
-TRANSCRIBE_FORMAT = "text, json (word timings and speakers), srt, or vtt."
-TRANSCRIBE_DIARIZE = "Label who is speaking. On by default; about 38% slower."
-TRANSCRIBE_LANGUAGE = "Language code of the speech, e.g. en or pt. Detected when omitted."
-TRANSCRIBE_TRANSLATE = "Translate the transcript into this language code."
-TRANSCRIPTION_JOB_ID = "A job id from transcribe. Omit it to list recent jobs."

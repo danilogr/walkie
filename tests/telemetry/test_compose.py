@@ -4,8 +4,8 @@ both `__main__` and `talk` hand their `TelemetrySession` from."""
 from speak_core.config import ServerSettings, VoiceSettings
 from speak_core.telemetry import store
 
-from speak.settings import Settings
-from speak.telemetry import compose
+from walkie.config import Settings
+from walkie.telemetry import compose
 
 
 def env(tmp_path, **extra: str) -> dict[str, str]:
@@ -15,7 +15,7 @@ def env(tmp_path, **extra: str) -> dict[str, str]:
 def test_build_returns_none_when_telemetry_is_off(tmp_path) -> None:
     assert (
         compose.build(
-            env(tmp_path, SPEAK_TELEMETRY="off"),
+            env(tmp_path, WALKIE_TELEMETRY="off"),
             settings=Settings(),
             plugin_version="1.1.0",
             host_platform="linux",
@@ -28,7 +28,7 @@ def test_build_writes_a_session_row_naming_the_engines(tmp_path) -> None:
     session = compose.build(
         env(tmp_path, CLAUDE_PLUGIN_ROOT="/plugin"),
         settings=Settings(
-            speech=VoiceSettings(prefix="SPEAK", engine="nemo"),
+            speech=VoiceSettings(prefix="WALKIE", engine="nemo"),
             server=ServerSettings(tts_model="magpie", asr_model="parakeet"),
         ),
         plugin_version="1.2.0",
@@ -58,7 +58,7 @@ def test_each_session_gets_a_fresh_session_id(tmp_path) -> None:
 def test_an_overlong_engine_name_is_cut_to_the_contract_length(tmp_path) -> None:
     session = compose.build(
         env(tmp_path),
-        settings=Settings(speech=VoiceSettings(prefix="SPEAK", engine="x" * 80)),
+        settings=Settings(speech=VoiceSettings(prefix="WALKIE", engine="x" * 80)),
         plugin_version="1.1.0",
         host_platform="linux",
     )

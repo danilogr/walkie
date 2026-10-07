@@ -6,7 +6,7 @@ from pathlib import Path
 
 from speak_core.telemetry import store
 
-from speak.telemetry.contract import IDENTITY, SCHEMA
+from walkie.telemetry.contract import IDENTITY, SCHEMA
 
 VENDORED = Path(__file__).parent.parent / "contract" / "v1" / "schema.sql"
 
@@ -51,5 +51,6 @@ def test_the_endpoint_and_disclosure_version_are_the_contracts() -> None:
     assert IDENTITY.default_endpoint == (
         "https://speak-telemetry.actionableintelligence.app/v1/ingest"
     )
-    assert IDENTITY.disclosure_version == 2
-    assert IDENTITY.mode_env == "SPEAK_TELEMETRY"
+    assert IDENTITY.disclosure_version == 1
+    assert IDENTITY.plugin == "walkie"
+    assert IDENTITY.mode_env == "WALKIE_TELEMETRY"

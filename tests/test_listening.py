@@ -4,10 +4,10 @@ from pathlib import Path
 
 from speak_core.engines.asr import DEFAULT_TIMEOUT
 
-from speak.capture import SilenceTracker, State
-from speak.cue import END_SOUND, START_SOUND
-from speak.listening import build_cue, build_recorder, capture_limits, transcription_timeout
-from speak.settings import Settings
+from walkie.capture import SilenceTracker, State
+from walkie.config import Settings
+from walkie.cue import END_SOUND, START_SOUND
+from walkie.listening import build_cue, build_recorder, capture_limits, transcription_timeout
 
 
 def test_capture_limits_turns_the_configured_seconds_into_milliseconds():

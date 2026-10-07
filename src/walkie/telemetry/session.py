@@ -11,18 +11,17 @@ store, and only the upload projection drops them.
 import hashlib
 import io
 import logging
-import re
 import sqlite3
 import uuid
 import wave
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from speak_core.engines import nemo, say
 from speak_core.queue import UtteranceOutcome
 from speak_core.telemetry import store
 
-from speak.telemetry.contract import SCHEMA
+from walkie.telemetry.contract import SCHEMA
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ def recorded_voice(engine: str, voice: str | None) -> str | None:
     """The voice as an `out` row may carry it: a known name in the engine's own
     spelling, `custom` for any other name, `None` when the engine's default ran.
 
-    A voice name is free text - `SPEAK_VOICE`, a `speak(voice=...)` argument, a
+    A voice name is free text - `WALKIE_VOICE`, a `speak(voice=...)` argument, a
     third-party voice installed for `say` - and free text never ships.
     """
     if not voice:
@@ -96,38 +95,12 @@ def wav_duration_ms(wav_bytes: bytes) -> int | None:
     return round(frames / rate * 1000)
 
 
-@dataclass(frozen=True, slots=True)
-class TranscriptionOutcome:
-    """The shape of one transcription, however far it got. Never its content."""
-
-    status: str  # ok | failed | refused | heard_nothing
-    source_bytes: int | None
-    audio_codec: str | None
-    audio_ms: int | None
-    asr_ms: int | None
-    converted: bool | None
-    diarize: bool
-    format: str
-    words: int | None = None
-    chars: int | None = None
-
-
-# What an `in`/`transcribe` row may carry, from the vendored contract
-# (`tests/contract/v1/schema/ingest-request.schema.json`). Respecting them is the
-# client's job: the server answers a row above a ceiling with a 400, and the
-# shipper sets that whole chunk aside for good - one eleven-gigabyte video would
-# cost every row that happened to ship beside it.
-MAX_SOURCE_BYTES = 10_737_418_240
-MAX_AUDIO_MS = 86_400_000
-MAX_ASR_MS = 86_400_000
-MAX_WORDS = 500_000
-MAX_CHARS = 5_000_000
-
-# The same four columns' ceilings for every other row - `speak`, `listen`, `talk` -
-# from the same contract's `else` branch, keyed on `source != "transcribe"`. Tighter,
-# because only a transcription gets the long-file exemption: a `listen` recording
-# past ten minutes (`SPEAK_LISTEN_MAX_SECONDS` set above 600) or an outsized `speak`
-# utterance would otherwise land the same 400, and lose the same chunk.
+# The contract's ceilings on `audio_ms`, `asr_ms`, `words` and `chars` for every source
+# walkie sends (`speak`, `listen`, `talk`: the contract's `else` branch, everything but
+# `transcribe`). The server answers a value above one with a 400 and the shipper sets
+# the whole chunk aside, so a `listen` recording past ten minutes
+# (`WALKIE_LISTEN_MAX_SECONDS` above 600) or an outsized `speak` utterance is clamped
+# here rather than costing every row shipped beside it.
 ROW_MAX_AUDIO_MS = 600_000
 ROW_MAX_ASR_MS = 120_000
 ROW_MAX_WORDS = 20_000
@@ -143,100 +116,12 @@ MAX_PLAY_MS = 600_000
 # caps its length, and the session row travels with every chunk.
 HARNESS_VERSION_MAX_LENGTH = 64
 
-# From the same contract: `audio_codec` must match this shape and length
-# (`tests/contract/v1/schema/ingest-request.schema.json`). Every codec ffprobe
-# reports matches both; a malformed probe or an exotic container might not, and the
-# server answers a non-matching value with the same 400 that ends a chunk's
-# unrelated speak/listen rows along with it - so a codec that would be rejected is
-# dropped here rather than sent.
-AUDIO_CODEC_PATTERN = re.compile(r"^[a-z0-9_]+$")
-AUDIO_CODEC_MAX_LENGTH = 32
-
-
-def clamped(outcome: TranscriptionOutcome) -> TranscriptionOutcome:
-    """The same outcome with every measured value inside the contract's range.
-
-    A clamped number is a statement about a ceiling rather than a measurement, which
-    is the right trade: the alternative to one approximate row is no rows at all.
-    """
-    return replace(
-        outcome,
-        source_bytes=_within(outcome.source_bytes, MAX_SOURCE_BYTES),
-        audio_codec=_codec_or_none(outcome.audio_codec),
-        audio_ms=_within(outcome.audio_ms, MAX_AUDIO_MS),
-        asr_ms=_within(outcome.asr_ms, MAX_ASR_MS),
-        words=_within(outcome.words, MAX_WORDS),
-        chars=_within(outcome.chars, MAX_CHARS),
-    )
-
-
-def _codec_or_none(codec: str | None) -> str | None:
-    """None rather than a value the contract's pattern or length would refuse.
-
-    `codec` is typed `str | None`, but it starts life as whatever a job record on
-    disk says `codec` is - JSON that a hand edit or a corrupted write could give any
-    shape at all - so the type is checked before the pattern is matched against it,
-    rather than trusting the annotation and raising a `TypeError` out of the
-    telemetry write.
-    """
-    if not isinstance(codec, str):
-        return None
-    if len(codec) > AUDIO_CODEC_MAX_LENGTH or not AUDIO_CODEC_PATTERN.fullmatch(codec):
-        return None
-    return codec
-
 
 def _within(value: int | None, ceiling: int) -> int | None:
     """Inside [0, ceiling]: the contract's minimum is as binding as its maximum."""
     if value is None:
         return None
     return min(max(value, 0), ceiling)
-
-
-def record_transcription(
-    conn: sqlite3.Connection,
-    *,
-    session_id: str,
-    install_id: str,
-    engine: str,
-    model: str | None,
-    outcome: TranscriptionOutcome,
-) -> None:
-    """Record one transcription as an `in` utterance from the `transcribe` source.
-
-    A function rather than a `TelemetrySession` method: the worker that finishes a
-    job is its own process, possibly long after the session that asked for it has
-    ended, and it has the store and the ids but not the session object. Not
-    `heard()` either, which stamps a `device_kind` the contract forbids on a
-    transcription. Never raises.
-    """
-    try:
-        store.insert_row(
-            conn,
-            SCHEMA.rows,
-            {
-                "utterance_id": str(uuid.uuid4()),
-                "session_id": session_id,
-                "install_id": install_id,
-                "direction": "in",
-                "source": "transcribe",
-                "occurred_at": store.now_iso(),
-                "engine": engine,
-                "model": model,
-                "words": outcome.words,
-                "chars": outcome.chars,
-                "audio_ms": outcome.audio_ms,
-                "asr_ms": outcome.asr_ms,
-                "status": outcome.status,
-                "source_bytes": outcome.source_bytes,
-                "audio_codec": outcome.audio_codec,
-                "converted": outcome.converted,
-                "diarize": outcome.diarize,
-                "format": outcome.format,
-            },
-        )
-    except Exception:
-        logger.debug("telemetry: failed to record a transcription", exc_info=True)
 
 
 @dataclass(slots=True)
@@ -276,7 +161,7 @@ class TelemetrySession:
         asr_ms: int | None = None,
         wav: bytes | None = None,
     ) -> None:
-        """Record one `listen` or `/talk` attempt, however far it got."""
+        """Record one `listen` or `/walkie:talk` attempt, however far it got."""
         try:
             self._write_heard(
                 source=source,

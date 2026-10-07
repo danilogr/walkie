@@ -1,13 +1,13 @@
 #!/bin/sh
-# Locate uv and run the speak MCP server. Invoked by .mcp.json through /bin/sh,
+# Locate uv and run the walkie MCP server. Invoked by .mcp.json through /bin/sh,
 # so it works even when the parent process has a bare PATH.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-run() { exec "$1" run --directory "$root" --quiet speak-mcp; }
+run() { exec "$1" run --directory "$root" --quiet walkie-mcp; }
 
-[ -n "${SPEAK_UV:-}" ] && [ -x "${SPEAK_UV:-}" ] && run "$SPEAK_UV"
+[ -n "${WALKIE_UV:-}" ] && [ -x "${WALKIE_UV:-}" ] && run "$WALKIE_UV"
 
 found=$(command -v uv 2>/dev/null) && [ -n "$found" ] && run "$found"
 
@@ -15,5 +15,5 @@ for candidate in "$HOME/.local/bin/uv" /opt/homebrew/bin/uv /usr/local/bin/uv; d
   [ -x "$candidate" ] && run "$candidate"
 done
 
-echo "speak: could not find uv. Install it from https://docs.astral.sh/uv/ or set SPEAK_UV." >&2
+echo "walkie: could not find uv. Install it from https://docs.astral.sh/uv/ or set WALKIE_UV." >&2
 exit 127

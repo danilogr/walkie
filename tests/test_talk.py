@@ -6,15 +6,15 @@ from speak_core.engines.asr import TranscriptionFailed
 from speak_core.telemetry import store
 
 from fakes import FakeMicLock, FakePlayer, FakeRecorder, FakeSupervisor, FakeTranscriber
-from speak import talk as talk_module
-from speak.capture import Recording, State
-from speak.cue import Cue
-from speak.miclock import MicrophoneBusy
-from speak.settings import Settings
-from speak.talk import capture, dictate, main
-from speak.telemetry.contract import SCHEMA
-from speak.telemetry.session import TelemetrySession
-from speak.tools import TALK_HEARD_NOTHING
+from walkie import talk as talk_module
+from walkie.capture import Recording, State
+from walkie.config import Settings
+from walkie.cue import Cue
+from walkie.miclock import MicrophoneBusy
+from walkie.talk import capture, dictate, main
+from walkie.telemetry.contract import SCHEMA
+from walkie.telemetry.session import TelemetrySession
+from walkie.tools import TALK_HEARD_NOTHING
 
 # Every capture below is given a cue, and none of them makes a sound: the silent one
 # never spawns a player, and the rest spawn a fake.
@@ -62,7 +62,7 @@ async def test_a_busy_microphone_is_reported():
 
 
 async def test_a_server_without_transcription_is_reported():
-    with pytest.raises(TranscriptionFailed, match="speak:setup"):
+    with pytest.raises(TranscriptionFailed, match="walkie:setup"):
         await capture(
             Settings(),
             recorder=FakeRecorder(SPOKEN),
@@ -74,7 +74,7 @@ async def test_a_server_without_transcription_is_reported():
 
 async def test_a_server_that_is_still_loading_says_to_wait():
     """A cold start answers before its models do. Naming a missing model there sends
-    the user to /speak:setup or to restart another session; both are wrong, and the
+    the user to /walkie:setup or to restart another session; both are wrong, and the
     eager warmup this branch added makes the window the ordinary first run."""
     with pytest.raises(TranscriptionFailed, match="starting up"):
         await capture(
@@ -124,7 +124,7 @@ async def test_the_lock_is_released_when_transcription_fails():
 
 
 async def test_the_microphone_is_cued_open_and_cued_shut():
-    """`/talk` is the acute case: you press enter with no idea whether to talk now or
+    """`/walkie:talk` is the acute case: you press enter with no idea whether to talk now or
     in two seconds, and recording stops on silence with nothing to say it has."""
     calls: list[str] = []
     player = FakePlayer(calls)
@@ -229,7 +229,7 @@ async def test_a_speech_server_that_is_not_there_is_started_and_then_used():
 
 
 async def test_the_speech_server_is_held_for_this_process_and_given_back():
-    """A standalone /talk must not leave a gigabyte of speech server behind it."""
+    """A standalone /walkie:talk must not leave a gigabyte of speech server behind it."""
     supervisor = FakeSupervisor()
 
     await _dictate(supervisor, FakeTranscriber(text="run the tests", reachable=True))
@@ -253,7 +253,7 @@ async def test_the_speech_server_is_given_back_when_the_recording_fails():
 
 
 async def test_autostart_off_leaves_the_speech_server_to_the_user():
-    """The composition root builds no supervisor under this setting; /talk must agree."""
+    """The composition root builds no supervisor under this setting; /walkie:talk must agree."""
     supervisor = FakeSupervisor()
 
     with pytest.raises(TranscriptionFailed, match="not answering"):
@@ -271,7 +271,7 @@ async def test_a_speech_server_that_will_not_start_names_the_fix():
     """A missing binary must arrive as one actionable line, not a spawn traceback."""
     supervisor = BrokenSupervisor()
 
-    with pytest.raises(TranscriptionFailed, match="speak:setup"):
+    with pytest.raises(TranscriptionFailed, match="walkie:setup"):
         await _dictate(supervisor, FakeTranscriber(reachable=False))
 
     assert supervisor.releases == 1
@@ -308,7 +308,7 @@ def test_silence_prints_the_sentinel_the_command_branches_on(monkeypatch, capsys
 
 
 def test_a_failure_reaches_the_prompt_as_well_as_the_log(monkeypatch, capsys):
-    """The command file branches on a line beginning `speak:`, so the line has to be
+    """The command file branches on a line beginning `walkie:`, so the line has to be
     in the message. Only stdout is certainly injected; stderr from a non-zero exit is
     not this plugin's to guarantee, and its absence would leave an empty transcript
     under an instruction to act on it as the user's request."""
@@ -319,8 +319,8 @@ def test_a_failure_reaches_the_prompt_as_well_as_the_log(monkeypatch, capsys):
 
     assert exit_info.value.code == 1
     printed = capsys.readouterr()
-    assert printed.out == "speak: could not transcribe: no server\n"
-    assert printed.err == "speak: could not transcribe: no server\n"
+    assert printed.out == "walkie: could not transcribe: no server\n"
+    assert printed.err == "walkie: could not transcribe: no server\n"
 
 
 def test_an_error_on_stdout_cannot_be_mistaken_for_the_user_talking(monkeypatch, capsys):
@@ -329,11 +329,11 @@ def test_an_error_on_stdout_cannot_be_mistaken_for_the_user_talking(monkeypatch,
     with pytest.raises(SystemExit):
         main()
 
-    assert capsys.readouterr().out.startswith("speak: ")
+    assert capsys.readouterr().out.startswith("walkie: ")
 
 
 def test_an_os_error_does_not_reach_the_prompt_as_a_traceback(monkeypatch, capsys):
-    """Whatever /talk prints is read as the user's own request, tracebacks included."""
+    """Whatever /walkie:talk prints is read as the user's own request, tracebacks included."""
     _speaking(monkeypatch, error=FileNotFoundError(2, "No such file or directory", "/nowhere"))
 
     with pytest.raises(SystemExit) as exit_info:
@@ -352,7 +352,7 @@ def test_the_command_file_branches_on_the_sentinel_talk_prints():
     assert TALK_HEARD_NOTHING in command.read_text()
 
 
-# --- telemetry: every /talk attempt leaves exactly one row, however it ended ---
+# --- telemetry: every /walkie:talk attempt leaves exactly one row, however it ended ---
 
 
 def _telemetry(tmp_path: Path) -> TelemetrySession:
@@ -499,21 +499,21 @@ async def test_a_failed_transcription_keeps_the_recordings_length(tmp_path):
 
 
 def test_the_command_file_names_its_host_to_the_launcher(tmp_path):
-    """`/talk` is no MCP session, so nothing else tells its session row which host
-    it ran under. The launcher exports the name it is given as `SPEAK_HARNESS`."""
+    """`/walkie:talk` is no MCP session, so nothing else tells its session row which host
+    it ran under. The launcher exports the name it is given as `WALKIE_HARNESS`."""
     import os
     import subprocess
 
     root = Path(__file__).resolve().parent.parent
-    assert 'scripts/speak-talk" claude-code`' in (root / "commands" / "talk.md").read_text()
+    assert 'scripts/walkie-talk" claude-code`' in (root / "commands" / "talk.md").read_text()
 
     fake_uv = tmp_path / "uv"
-    fake_uv.write_text('#!/bin/sh\nprintf %s "$SPEAK_HARNESS"\n')
+    fake_uv.write_text('#!/bin/sh\nprintf %s "$WALKIE_HARNESS"\n')
     fake_uv.chmod(0o755)
-    env = {**os.environ, "SPEAK_UV": str(fake_uv)}
-    env.pop("SPEAK_HARNESS", None)
+    env = {**os.environ, "WALKIE_UV": str(fake_uv)}
+    env.pop("WALKIE_HARNESS", None)
     result = subprocess.run(
-        ["sh", str(root / "scripts" / "speak-talk"), "claude-code"],
+        ["sh", str(root / "scripts" / "walkie-talk"), "claude-code"],
         env=env,
         capture_output=True,
         text=True,

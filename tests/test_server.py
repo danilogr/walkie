@@ -1,6 +1,6 @@
 """End-to-end: a real server process driven over stdio by a real MCP client.
 
-`SPEAK_ENGINE=command` points at a recorder script, so the suite exercises the
+`WALKIE_ENGINE=command` points at a recorder script, so the suite exercises the
 whole path without producing audio.
 """
 
@@ -15,8 +15,8 @@ import pytest
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
-from speak.__main__ import build_supervisor
-from speak.settings import Settings
+from walkie.__main__ import build_supervisor
+from walkie.config import Settings
 
 RECORDER = """#!{python}
 import json, sys, pathlib
@@ -48,14 +48,14 @@ def server_env(command: str, state_dir: str, extra_env: dict[str, str] | None = 
     """
     return {
         **os.environ,
-        "SPEAK_ENGINE": "command",
-        "SPEAK_COMMAND": command,
+        "WALKIE_ENGINE": "command",
+        "WALKIE_COMMAND": command,
         "NEMO_AUTOSTART": "0",
-        "SPEAK_STATE_DIR": state_dir,
+        "WALKIE_STATE_DIR": state_dir,
         "SPEAK_CORE_STATE_DIR": state_dir,
-        # Telemetry reads its own config directory, never SPEAK_STATE_DIR; without
+        # Telemetry reads its own config directory, never WALKIE_STATE_DIR; without
         # this, every subprocess below would write to the real machine's config dir.
-        "SPEAK_TELEMETRY": "off",
+        "WALKIE_TELEMETRY": "off",
         **(extra_env or {}),
     }
 
@@ -65,7 +65,7 @@ async def connected(command: str, extra_env: dict[str, str] | None = None):
     with tempfile.TemporaryDirectory() as state_dir:
         parameters = StdioServerParameters(
             command=sys.executable,
-            args=["-m", "speak"],
+            args=["-m", "walkie"],
             env=server_env(command, state_dir, extra_env),
             cwd=str(Path.cwd()),
         )
@@ -101,8 +101,6 @@ async def test_initializes_and_reports_its_name(recorder):
             "set_voice",
             "speech_status",
             "listen",
-            "transcribe",
-            "transcription_status",
         }
 
 
@@ -167,7 +165,7 @@ async def test_speech_status_is_offered_over_stdio(recorder):
 
 async def test_the_character_cap_is_honoured_end_to_end(recorder):
     script, log = recorder
-    async with connected(f"{sys.executable} {script}", {"SPEAK_MAX_CHARS": "11"}) as session:
+    async with connected(f"{sys.executable} {script}", {"WALKIE_MAX_CHARS": "11"}) as session:
         await text_of(session, "speak", text="one two three four")
         await _wait_for_lines(log, 1)
 
@@ -243,3 +241,15 @@ async def test_a_client_sees_conversation_mode_over_stdio(recorder):
         served = (await session.get_prompt("converse")).messages[0].content.text
         assert not served.startswith("---")
         assert "listen" in served
+
+
+async def test_a_sentence_the_player_cannot_start_does_not_silence_the_session(recorder):
+    """A NUL byte reaches the player as an argument the OS refuses with ValueError, not
+    OSError. That one sentence fails; every sentence after it is still spoken."""
+    script, log = recorder
+    async with connected(f"{sys.executable} {script}") as session:
+        await text_of(session, "speak", text="bad\x00sentence")
+        await text_of(session, "speak", text="after")
+        await _wait_for_lines(log, 1)
+
+    assert [json.loads(line)[0] for line in log.read_text().splitlines()] == ["after"]

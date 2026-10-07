@@ -14,10 +14,10 @@ destructive or irreversible - deleting files, force-pushing, dropping data,
 running a migration - read the transcript back and wait for a yes.
 
 If the transcript is "(heard nothing)", tell the user you heard nothing and stop.
-A line beginning `speak:` is an error from the capture script, not the user's
+A line beginning `walkie:` is an error from the capture script, not the user's
 words: report that line as it stands and stop. It is printed on both streams, so
 it reaches you whichever one this message carries.
 
 ---
 
-!`sh "${CLAUDE_PLUGIN_ROOT}/scripts/speak-talk" claude-code`
+!`sh "${CLAUDE_PLUGIN_ROOT}/scripts/walkie-talk" claude-code`

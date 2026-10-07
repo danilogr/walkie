@@ -109,10 +109,10 @@ def test_resuming_picks_up_at_the_first_unrecorded_take(tmp_path):
 @pytest.mark.parametrize(
     ("flag", "env", "expected"),
     [
-        ("Studio Mic", {"SPEAK_INPUT_DEVICE": "MacBook Pro Microphone"}, "Studio Mic"),
-        (None, {"SPEAK_INPUT_DEVICE": "MacBook Pro Microphone"}, "MacBook Pro Microphone"),
+        ("Studio Mic", {"WALKIE_INPUT_DEVICE": "MacBook Pro Microphone"}, "Studio Mic"),
+        (None, {"WALKIE_INPUT_DEVICE": "MacBook Pro Microphone"}, "MacBook Pro Microphone"),
         (None, {}, None),
-        (None, {"SPEAK_INPUT_DEVICE": ""}, None),
+        (None, {"WALKIE_INPUT_DEVICE": ""}, None),
     ],
 )
 def test_the_microphone_defaults_to_the_one_the_plugin_is_pinned_to(flag, env, expected):

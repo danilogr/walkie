@@ -1,8 +1,9 @@
 ---
-description: Show everything the speak plugin's telemetry has collected on this machine
+description: Show what walkie has recorded about your own speech and listening on this machine
+allowed-tools: Bash(uv run:*)
 ---
 
-Run `uv run --directory "${CLAUDE_PLUGIN_ROOT}" --quiet speak-stats` and show its output
+Run `uv run --directory "${CLAUDE_PLUGIN_ROOT}" --quiet walkie-stats` and show its output
 as it stands. If `uv` is not on PATH, use `~/.local/bin/uv`.
 
 It reads the local telemetry database and changes nothing. Do not summarise away rows

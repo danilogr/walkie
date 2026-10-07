@@ -8,9 +8,9 @@ from collections.abc import Mapping
 
 from speak_core.telemetry import store, wiring
 
-from speak.settings import Settings
-from speak.telemetry.contract import IDENTITY, SCHEMA, db_path
-from speak.telemetry.session import TelemetrySession
+from walkie.config import Settings
+from walkie.telemetry.contract import IDENTITY, SCHEMA, db_path
+from walkie.telemetry.session import TelemetrySession
 
 RECORDINGS_DIRNAME = "recordings"
 TTS_ENGINE_MAX_LENGTH = 32

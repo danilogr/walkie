@@ -9,11 +9,11 @@ from speak_core.engines.asr import TranscriptionFailed
 from speak_core.queue import QueueStats
 
 from fakes import FakeEngine, FakeMicLock, FakePlayer, FakeQueue, FakeRecorder, FakeTranscriber
-from speak import server as server_module
-from speak.capture import Recorder, RecorderUnavailable, Recording, State, TrackerSettings
-from speak.cue import Cue
-from speak.server import Ears, create_server
-from speak.settings import Settings
+from walkie import server as server_module
+from walkie.capture import Recorder, RecorderUnavailable, Recording, State, TrackerSettings
+from walkie.config import Settings
+from walkie.cue import Cue
+from walkie.server import Ears, create_server
 
 # Named for their stems, which is what the fake player logs when a cue finishes.
 CUE_START = Path("/sounds/cue-start.aiff")
@@ -255,7 +255,7 @@ async def test_a_server_that_is_still_loading_says_to_wait():
 
 async def test_a_server_without_transcription_explains_both_causes():
     rig = build(has_asr=False)
-    with pytest.raises(ToolError, match="speak:setup"):
+    with pytest.raises(ToolError, match="walkie:setup"):
         await call_listen(rig.server)
     assert rig.lock.acquires == 0
 
@@ -339,7 +339,7 @@ async def test_a_wedged_queue_is_refused_rather_than_recorded_over(monkeypatch, 
     monkeypatch.setattr(server_module, "DRAIN_BACKSTOP", 0.01)
     rig = build(queue=StuckQueue())
     with (
-        caplog.at_level(logging.WARNING, logger="speak.server"),
+        caplog.at_level(logging.WARNING, logger="walkie.server"),
         pytest.raises(ToolError, match="stop_speaking"),
     ):
         await call_listen(rig.server)

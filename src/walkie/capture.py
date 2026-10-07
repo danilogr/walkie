@@ -317,7 +317,7 @@ class MicrophoneRecorder:
 
     The device a session settles on is remembered on the instance and nowhere else.
     `listen` is served by a process that lives as long as the session, so it pays for
-    the search once; `/talk` is a fresh process per utterance and searches every time,
+    the search once; `/walkie:talk` is a fresh process per utterance and searches every time,
     which costs one calibration window per dead device ahead of a live one. Keeping it
     out of the filesystem is deliberate: a remembered device that outlived the session
     would silently override the setting the user can actually see.
@@ -475,10 +475,10 @@ def _silence_hint(tried: Sequence[str], *, explicit: bool) -> str:
     named = ", ".join(tried)
     if explicit:
         return (
-            f"SPEAK_INPUT_DEVICE names {named}, and it delivers only digital silence. "
+            f"WALKIE_INPUT_DEVICE names {named}, and it delivers only digital silence. "
             "A live microphone always carries a noise floor, so that input is muted or "
             "its volume is at zero. Fix it in System Settings > Sound > Input, or unset "
-            "SPEAK_INPUT_DEVICE to search the other inputs."
+            "WALKIE_INPUT_DEVICE to search the other inputs."
         )
     return (
         f"no microphone is delivering any audio. Tried: {named}. Every one returned "

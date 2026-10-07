@@ -9,8 +9,8 @@ import pytest
 from speak_core.queue import UtteranceOutcome
 from speak_core.telemetry import store
 
-from speak.telemetry.contract import SCHEMA
-from speak.telemetry.session import (
+from walkie.telemetry.contract import SCHEMA
+from walkie.telemetry.session import (
     HARNESS_VERSION_MAX_LENGTH,
     MAX_PLAY_MS,
     MAX_QUEUE_WAIT_MS,
@@ -213,7 +213,7 @@ def _wav_of_seconds(seconds: int) -> bytes:
 
 
 def test_heard_clamps_an_over_ceiling_listen_row() -> None:
-    """A `SPEAK_LISTEN_MAX_SECONDS` above ten minutes can produce a row past the
+    """A `WALKIE_LISTEN_MAX_SECONDS` above ten minutes can produce a row past the
     schema's tighter `else`-branch ceilings - the same stall the transcription
     clamp exists to prevent, for the same reason: a 400 ends that chunk's backlog
     and everything shipped after it."""

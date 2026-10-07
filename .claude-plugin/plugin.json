@@ -1,5 +1,6 @@
 {
-  "name": "speak",
-  "version": "1.6.0",
-  "description": "Gives Claude Code a voice: a speak tool that says one short sentence out loud when a task finishes, when it is blocked, or when it needs an answer. Queued so utterances never overlap, and pluggable so speech can come from macOS say, a plugin-managed local NeMo-Speech.cpp server, or any command."
+  "name": "walkie",
+  "version": "1.0.0",
+  "description": "Talk with your coding agent: it speaks one short sentence when a task finishes, when it is blocked or when it needs an answer, and listens to your reply. /walkie:talk dictates a prompt; /walkie:converse talks for a whole session. Runs entirely on your machine, powered by NVIDIA NeMo-Speech.cpp.",
+  "repository": "https://github.com/danilogr/walkie"
 }

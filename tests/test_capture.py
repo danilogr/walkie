@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from speak.capture import (
+from walkie.capture import (
     FINAL,
     MicrophoneRecorder,
     RecorderUnavailable,
@@ -542,9 +542,9 @@ async def test_every_input_muted_says_so_rather_than_reporting_silence(monkeypat
 
 async def test_a_named_input_is_never_quietly_swapped_for_another(monkeypatch):
     """Recording from a device the user did not ask for is worse than saying theirs
-    is mute, so an explicit SPEAK_INPUT_DEVICE ends the search rather than starting it."""
+    is mute, so an explicit WALKIE_INPUT_DEVICE ends the search rather than starting it."""
     opened = fake_inputs(monkeypatch, {"Built-in Mic": 0, "USB Headset": 1}, default="Built-in Mic")
-    with pytest.raises(RecorderUnavailable, match="SPEAK_INPUT_DEVICE"):
+    with pytest.raises(RecorderUnavailable, match="WALKIE_INPUT_DEVICE"):
         await MicrophoneRecorder(device="Built-in Mic").record(LIMITS)
     assert opened == ["Built-in Mic"]
 

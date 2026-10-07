@@ -1,4 +1,4 @@
-"""speak-stats: this plugin's local dashboard, plain SQL over its raw tables."""
+"""walkie-stats: this plugin's local dashboard, plain SQL over its raw tables."""
 
 import sqlite3
 

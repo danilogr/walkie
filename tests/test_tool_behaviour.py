@@ -3,8 +3,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from speak_core.queue import QueueStats
 
 from fakes import FakeEngine, FakeQueue, FakeSupervisor
-from speak.server import create_server
-from speak.settings import Settings
+from walkie.config import Settings
+from walkie.server import create_server
 
 
 def build(engine=None, queue=None, supervisor=None, env=None):
@@ -27,7 +27,7 @@ async def test_speak_collapses_whitespace_before_queueing():
 
 
 async def test_speak_truncates_at_the_configured_cap():
-    server, _, queue = build(env={"SPEAK_MAX_CHARS": "11"})
+    server, _, queue = build(env={"WALKIE_MAX_CHARS": "11"})
     await call(server, "speak", text="one two three four")
     assert queue.enqueued[0][0] == "one two…"
 
@@ -55,13 +55,13 @@ async def test_speak_rejects_empty_text_with_a_message_the_model_can_read():
 
 
 async def test_speak_uses_the_starting_voice_from_the_environment():
-    server, _, queue = build(env={"SPEAK_VOICE": "Samantha", "SPEAK_RATE": "190"})
+    server, _, queue = build(env={"WALKIE_VOICE": "Samantha", "WALKIE_RATE": "190"})
     await call(server, "speak", text="hi")
     assert queue.enqueued[0] == ("hi", "Samantha", 190)
 
 
 async def test_an_explicit_voice_overrides_the_session_voice():
-    server, _, queue = build(env={"SPEAK_VOICE": "Samantha"})
+    server, _, queue = build(env={"WALKIE_VOICE": "Samantha"})
     await call(server, "speak", text="hi", voice="Sofia")
     assert queue.enqueued[0][1] == "Sofia"
 

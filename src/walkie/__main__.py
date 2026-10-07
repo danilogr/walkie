@@ -20,14 +20,13 @@ from speak_core.telemetry import ship as telemetry_ship
 from speak_core.telemetry import store as telemetry_store
 from speak_core.telemetry import wiring as telemetry_wiring
 
-from speak.listening import build_cue, build_recorder, capture_limits, transcription_timeout
-from speak.miclock import MicLock
-from speak.server import VERSION as PLUGIN_VERSION
-from speak.server import Ears, create_server
-from speak.settings import PLUGIN, Settings
-from speak.telemetry import compose as telemetry_compose
-from speak.telemetry.contract import IDENTITY, SCHEMA, db_path
-from speak.transcribe.service import build_scribe
+from walkie.config import PLUGIN, Settings
+from walkie.listening import build_cue, build_recorder, capture_limits, transcription_timeout
+from walkie.miclock import MicLock
+from walkie.server import VERSION as PLUGIN_VERSION
+from walkie.server import Ears, create_server
+from walkie.telemetry import compose as telemetry_compose
+from walkie.telemetry.contract import IDENTITY, SCHEMA, db_path
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +36,7 @@ _background: set[asyncio.Task[object]] = set()
 def build_ears(settings: Settings) -> Ears:
     """Everything the listen tool needs.
 
-    Unconditional: `/speak:converse` and `/talk` are part of the plugin, so they
+    Unconditional: `/walkie:converse` and `/walkie:talk` are part of the plugin, so they
     cannot depend on a switch the user has to discover. When transcription is not
     actually available the `listen` tool says so and names the remedy.
     """
@@ -170,7 +169,6 @@ def build(settings: Settings) -> MCPServer:
         supervisor=supervisor,
         ears=build_ears(settings),
         telemetry=telemetry,
-        scribe=build_scribe(settings),
         on_session_start=schedule_sends,
     )
 

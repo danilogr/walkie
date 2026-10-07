@@ -1,6 +1,6 @@
 import pytest
 
-from speak.miclock import MicLock, MicrophoneBusy
+from walkie.miclock import MicLock, MicrophoneBusy
 
 
 def build(tmp_path, pid: int = 100, alive: bool = True) -> MicLock:

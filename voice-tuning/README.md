@@ -21,12 +21,12 @@ to fine-tune the recogniser on it.
 Record on the microphone you speak into every day. Training on one and speaking into
 another costs much of what fine-tuning buys.
 
-If you pinned one for the plugin with `SPEAK_INPUT_DEVICE`, the recorder uses it and you can
-skip ahead. Otherwise the plugin picks a microphone itself, and `/talk` names the one it used
+If you pinned one for the plugin with `WALKIE_INPUT_DEVICE`, the recorder uses it and you can
+skip ahead. Otherwise the plugin picks a microphone itself, and `/walkie:talk` names the one it used
 on its first line:
 
 ```text
-[speak] capture: MacBook Pro Microphone: done (gate 0.0225, peak 0.0360)
+[walkie] capture: MacBook Pro Microphone: done (gate 0.0225, peak 0.0360)
 ```
 
 List what this Mac has:
@@ -63,10 +63,10 @@ actually changes. That is what the extra takes are for.
 
 ### What it writes
 
-Everything goes into one folder, `~/speak-voice-dataset/` unless you pass `--out`:
+Everything goes into one folder, `~/walkie-voice-dataset/` unless you pass `--out`:
 
 ```text
-speak-voice-dataset/
+walkie-voice-dataset/
   audio/001-1.wav        sentence 1, take 1 — 16 kHz, mono, 16-bit
   audio/001-2.wav
   ...
