@@ -16,7 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 from speak_core.engines.asr import Liveness, Transcriber, TranscriptionFailed
 from speak_core.engines.base import Engine
-from speak_core.queue import QueueStats
+from speak_core.queue import QueueStats, Speaker
 from speak_core.queue import describe as describe_queue
 from speak_core.telemetry.wiring import normalize_harness
 from speak_core.text import normalize
@@ -26,6 +26,7 @@ from walkie.capture import Recorder, RecorderUnavailable, Recording, TrackerSett
 from walkie.config import Settings
 from walkie.cue import Cue
 from walkie.miclock import MicLock, MicrophoneBusy
+from walkie.speakers import SpeakersBusyError, holding
 from walkie.telemetry.session import TelemetrySession
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ class Ears:
     recorder: Recorder
     transcriber: Transcriber
     mic_lock: MicLock
+    speaker: Speaker
     limits: TrackerSettings
     cue: Cue
 
@@ -457,15 +459,30 @@ def create_server(
                 except MicrophoneBusy as error:
                     note_heard("refused")
                     raise ToolError(str(error)) from error
+                except OSError as error:
+                    note_heard("failed")
+                    raise ToolError(str(error)) from error
 
                 recording: Recording | None = None
                 try:
-                    # The cues bracket the recording and nothing else: they say the
-                    # microphone is open and that it has shut, which is the moment
-                    # recording stops rather than the moment the transcript lands.
-                    async with ears.cue.around_recording() as outcome:
-                        recording = await ears.recorder.record(_limits(ears.limits, max_seconds))
-                        outcome.heard = recording.has_speech
+                    try:
+                        # The speakers are held for exactly as long as the microphone is
+                        # open: another plugin reading aloud pauses between two sentences
+                        # instead of being recorded, and is free again for the
+                        # transcription. The cues bracket the recording and nothing else:
+                        # they say the microphone is open and that it has shut.
+                        async with (
+                            holding(ears.speaker),
+                            ears.cue.around_recording() as outcome,
+                        ):
+                            recording = await ears.recorder.record(
+                                _limits(ears.limits, max_seconds)
+                            )
+                            outcome.heard = recording.has_speech
+                    except SpeakersBusyError as error:
+                        note_heard("refused")
+                        raise ToolError(str(error)) from error
+                    assert recording is not None
                     logger.info("capture: %s", describe(recording))
                     if not recording.has_speech:
                         note_heard("heard_nothing", device_name=recording.device, wav=recording.wav)

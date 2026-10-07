@@ -8,8 +8,17 @@ from mcp.server.mcpserver.exceptions import ToolError
 from speak_core.engines.asr import TranscriptionFailed
 from speak_core.queue import QueueStats
 
-from fakes import FakeEngine, FakeMicLock, FakePlayer, FakeQueue, FakeRecorder, FakeTranscriber
+from fakes import (
+    FakeEngine,
+    FakeMicLock,
+    FakePlayer,
+    FakeQueue,
+    FakeRecorder,
+    FakeSpeaker,
+    FakeTranscriber,
+)
 from walkie import server as server_module
+from walkie import speakers
 from walkie.capture import Recorder, RecorderUnavailable, Recording, State, TrackerSettings
 from walkie.config import Settings
 from walkie.cue import Cue
@@ -34,6 +43,7 @@ class Rig(NamedTuple):
     lock: FakeMicLock
     player: FakePlayer
     calls: list[str]
+    speaker: FakeSpeaker
 
 
 def build(
@@ -51,6 +61,8 @@ def build(
     starting=False,
     player=None,
     cue=None,
+    speaker=None,
+    mic_error=None,
 ) -> Rig:
     calls: list[str] = []
     queue = queue if queue is not None else FakeQueue(calls=calls)
@@ -62,7 +74,8 @@ def build(
     transcriber = FakeTranscriber(
         text=text, has_asr=has_asr, error=error, reachable=reachable, starting=starting
     )
-    lock = FakeMicLock(busy_with=busy_with)
+    lock = FakeMicLock(busy_with=busy_with, error=mic_error)
+    speaker = speaker if speaker is not None else FakeSpeaker()
     server = create_server(
         settings=Settings(listen_language=language),
         engine=FakeEngine(),
@@ -72,13 +85,14 @@ def build(
             recorder=recorder,
             transcriber=transcriber,
             mic_lock=lock,
+            speaker=speaker,
             limits=limits if limits is not None else TrackerSettings(),
             cue=cue
             if cue is not None
             else Cue(start=CUE_START, end=CUE_END, empty=CUE_EMPTY, spawn=player.spawn),
         ),
     )
-    return Rig(server, queue, recorder, transcriber, lock, player, calls)
+    return Rig(server, queue, recorder, transcriber, lock, player, calls, speaker)
 
 
 async def tool_names(server) -> set[str]:
@@ -461,3 +475,59 @@ async def test_a_refusal_names_the_prepared_utterance(monkeypatch):
     )
     with pytest.raises(ToolError, match="1 prepared"):
         await call_listen(rig.server)
+
+
+async def test_the_speakers_are_held_from_the_opening_cue_to_the_closing_one():
+    """Another plugin reading aloud must not be recorded, and must not wait for the
+    transcript either: the speakers are held around the recording and nothing else."""
+    rig = build()
+    rig.speaker.calls = rig.calls
+    rig.transcriber.calls = rig.calls
+    await call_listen(rig.server)
+    assert rig.calls == [
+        "drain",
+        "speaker",
+        "cue-start",
+        "record",
+        "cue-end",
+        "speaker-release",
+        "transcribe",
+    ]
+
+
+async def test_speakers_that_never_come_free_refuse_the_recording(monkeypatch):
+    """A player stuck holding the lock must not hold the user's answer hostage: the call
+    is refused with what to do, nothing is cued or recorded, and the microphone is
+    given back."""
+    monkeypatch.setattr(speakers, "SPEAKER_WAIT_S", 0.05)
+    rig = build(speaker=FakeSpeaker(busy=True))
+    with pytest.raises(ToolError, match="another program kept speaking"):
+        await call_listen(rig.server)
+    assert rig.calls == ["drain"]
+    assert rig.player.commands == []
+    assert (rig.lock.held, rig.lock.releases) == (False, 1)
+    assert rig.speaker.releases == 0
+
+
+async def test_a_busy_microphone_is_refused_before_waiting_for_the_speakers():
+    rig = build(busy_with=4242, speaker=FakeSpeaker(busy=True))
+    with pytest.raises(ToolError, match="4242"):
+        await asyncio.wait_for(call_listen(rig.server), timeout=5)
+    assert rig.speaker.acquires == 0
+
+
+async def test_the_speakers_are_given_back_when_the_microphone_fails():
+    rig = build(recorder=BrokenRecorder(SPOKEN))
+    with pytest.raises(ToolError, match="no microphone binding"):
+        await call_listen(rig.server)
+    assert (rig.speaker.held, rig.speaker.releases) == (False, 1)
+
+
+async def test_an_unusable_microphone_lock_is_a_tool_error_that_takes_nothing():
+    """The lock lives on the filesystem; an unwritable state directory must reach the
+    caller as one refusal, not a traceback, and must not touch the speakers."""
+    rig = build(mic_error=PermissionError("state directory is read-only"), speaker=FakeSpeaker())
+    with pytest.raises(ToolError, match="state directory is read-only"):
+        await call_listen(rig.server)
+    assert rig.speaker.acquires == 0
+    assert rig.calls == ["drain"]

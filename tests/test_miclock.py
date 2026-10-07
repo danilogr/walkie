@@ -1,3 +1,6 @@
+import os
+import time
+
 import pytest
 
 from walkie.miclock import MicLock, MicrophoneBusy
@@ -5,6 +8,12 @@ from walkie.miclock import MicLock, MicrophoneBusy
 
 def build(tmp_path, pid: int = 100, alive: bool = True) -> MicLock:
     return MicLock(state_dir=tmp_path, pid=pid, is_alive=lambda _: alive)
+
+
+def age(path, seconds: float = 10.0) -> None:
+    """Make a lock directory look untouched for `seconds`."""
+    then = time.time() - seconds
+    os.utime(path, (then, then))
 
 
 def test_acquire_records_the_owning_pid(tmp_path):
@@ -33,9 +42,28 @@ def test_reacquiring_from_the_same_process_is_allowed(tmp_path):
     assert lock.owner() == 123
 
 
-def test_an_unreadable_owner_file_is_reclaimed(tmp_path):
+def test_an_ownerless_lock_is_a_claim_in_progress_not_a_free_microphone(tmp_path):
+    """Another session is between its `mkdir` and its owner write. Taking the lock now
+    would put two recordings on one microphone."""
+    (tmp_path / "mic").mkdir(parents=True)
+    with pytest.raises(MicrophoneBusy) as caught:
+        build(tmp_path, pid=456).acquire()
+    assert caught.value.owner is None
+    assert str(caught.value) == "another session is listening; only one can use the microphone"
+
+
+def test_an_ownerless_lock_left_long_enough_is_reclaimed(tmp_path):
+    """Only a session that died mid-claim leaves one unchanged for the whole grace."""
+    (tmp_path / "mic").mkdir(parents=True)
+    age(tmp_path / "mic")
+    build(tmp_path, pid=456).acquire()
+    assert (tmp_path / "mic" / "owner").read_text() == "456"
+
+
+def test_an_unreadable_owner_file_is_reclaimed_once_it_is_stale(tmp_path):
     (tmp_path / "mic").mkdir(parents=True)
     (tmp_path / "mic" / "owner").write_text("not a pid")
+    age(tmp_path / "mic")
     build(tmp_path, pid=456).acquire()
     assert (tmp_path / "mic" / "owner").read_text() == "456"
 

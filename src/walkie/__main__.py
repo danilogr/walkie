@@ -10,7 +10,7 @@ from typing import Protocol
 from mcp.server.mcpserver import MCPServer
 from speak_core.engines import build_engine
 from speak_core.engines.asr import NemoTranscriber
-from speak_core.queue import SpeechQueue, UtteranceOutcome
+from speak_core.queue import Speaker, SpeechQueue, UtteranceOutcome
 from speak_core.runtime import configure_logging, supervisor_for
 from speak_core.speaker import SpeakerLock
 from speak_core.supervisor import NemoSupervisor, process_is_alive
@@ -33,12 +33,15 @@ logger = logging.getLogger(__name__)
 _background: set[asyncio.Task[object]] = set()
 
 
-def build_ears(settings: Settings) -> Ears:
+def build_ears(settings: Settings, *, speaker: Speaker) -> Ears:
     """Everything the listen tool needs.
 
     Unconditional: `/walkie:converse` and `/walkie:talk` are part of the plugin, so they
     cannot depend on a switch the user has to discover. When transcription is not
     actually available the `listen` tool says so and names the remedy.
+
+    `speaker` is the lock the speech queue plays under, so a recording and this
+    session's own next sentence take turns like any two processes.
     """
     return Ears(
         recorder=build_recorder(settings),
@@ -49,6 +52,7 @@ def build_ears(settings: Settings) -> Ears:
             timeout=transcription_timeout(settings),
         ),
         mic_lock=MicLock(state_dir=settings.state_dir, is_alive=process_is_alive),
+        speaker=speaker,
         limits=capture_limits(settings),
         cue=build_cue(settings),
     )
@@ -139,11 +143,8 @@ def build(settings: Settings) -> MCPServer:
         if telemetry is not None:
             telemetry.utterance_finished(outcome)
 
-    queue = SpeechQueue(
-        prepare=engine.prepare,
-        on_finish=on_finish,
-        speaker=SpeakerLock(shared_dir=settings.server.shared_dir),
-    )
+    speaker = SpeakerLock(shared_dir=settings.server.shared_dir)
+    queue = SpeechQueue(prepare=engine.prepare, on_finish=on_finish, speaker=speaker)
 
     def schedule_sends() -> None:
         """Deferred to the server's lifespan: `build()` runs before `server.run()`
@@ -167,7 +168,7 @@ def build(settings: Settings) -> MCPServer:
         engine=engine,
         queue=queue,
         supervisor=supervisor,
-        ears=build_ears(settings),
+        ears=build_ears(settings, speaker=speaker),
         telemetry=telemetry,
         on_session_start=schedule_sends,
     )

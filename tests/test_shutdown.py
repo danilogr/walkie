@@ -2,7 +2,7 @@
 
 import asyncio
 
-from fakes import FakeMicLock, FakeRecorder, FakeSupervisor, FakeTranscriber
+from fakes import FakeMicLock, FakeRecorder, FakeSpeaker, FakeSupervisor, FakeTranscriber
 from walkie import server as server_module
 from walkie.capture import Recording, State, TrackerSettings
 from walkie.cue import Cue
@@ -83,6 +83,7 @@ def ears(*, reachable: bool = False) -> Ears:
         recorder=FakeRecorder(Recording(wav=b"", reason=State.DONE, has_speech=True)),
         transcriber=FakeTranscriber(reachable=reachable),
         mic_lock=FakeMicLock(),
+        speaker=FakeSpeaker(),
         limits=TrackerSettings(),
         cue=Cue(enabled=False),
     )

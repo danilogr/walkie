@@ -5,12 +5,21 @@ from speak_core.config import ServerSettings
 from speak_core.engines.asr import TranscriptionFailed
 from speak_core.telemetry import store
 
-from fakes import FakeMicLock, FakePlayer, FakeRecorder, FakeSupervisor, FakeTranscriber
+from fakes import (
+    FakeMicLock,
+    FakePlayer,
+    FakeRecorder,
+    FakeSpeaker,
+    FakeSupervisor,
+    FakeTranscriber,
+)
+from walkie import speakers
 from walkie import talk as talk_module
 from walkie.capture import Recording, State
 from walkie.config import Settings
 from walkie.cue import Cue
 from walkie.miclock import MicrophoneBusy
+from walkie.speakers import SpeakersBusyError
 from walkie.talk import capture, dictate, main
 from walkie.telemetry.contract import SCHEMA
 from walkie.telemetry.session import TelemetrySession
@@ -34,6 +43,7 @@ async def test_a_spoken_prompt_comes_back_as_text():
         recorder=FakeRecorder(SPOKEN),
         transcriber=FakeTranscriber(text="run the tests", reachable=True),
         lock=FakeMicLock(),
+        speaker=FakeSpeaker(),
         cue=SILENT,
     )
     assert text == "run the tests"
@@ -45,6 +55,7 @@ async def test_saying_nothing_comes_back_empty():
         recorder=FakeRecorder(NOTHING),
         transcriber=FakeTranscriber(text="ignored", reachable=True),
         lock=FakeMicLock(),
+        speaker=FakeSpeaker(),
         cue=SILENT,
     )
     assert text == ""
@@ -57,6 +68,7 @@ async def test_a_busy_microphone_is_reported():
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(reachable=True),
             lock=FakeMicLock(busy_with=99),
+            speaker=FakeSpeaker(),
             cue=SILENT,
         )
 
@@ -68,6 +80,7 @@ async def test_a_server_without_transcription_is_reported():
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(has_asr=False, reachable=True),
             lock=FakeMicLock(),
+            speaker=FakeSpeaker(),
             cue=SILENT,
         )
 
@@ -82,6 +95,7 @@ async def test_a_server_that_is_still_loading_says_to_wait():
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(has_asr=False, reachable=True, starting=True),
             lock=FakeMicLock(),
+            speaker=FakeSpeaker(),
             cue=SILENT,
         )
 
@@ -93,6 +107,7 @@ async def test_a_speech_server_that_is_not_there_is_not_called_a_missing_model()
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(has_asr=False, reachable=False),
             lock=FakeMicLock(),
+            speaker=FakeSpeaker(),
             cue=SILENT,
         )
 
@@ -105,6 +120,7 @@ async def test_the_microphone_is_not_opened_while_the_server_is_still_loading():
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(reachable=True, starting=True),
             lock=lock,
+            speaker=FakeSpeaker(),
             cue=SILENT,
         )
     assert lock.acquires == 0
@@ -118,6 +134,7 @@ async def test_the_lock_is_released_when_transcription_fails():
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(error=TranscriptionFailed("no server"), reachable=True),
             lock=lock,
+            speaker=FakeSpeaker(),
             cue=SILENT,
         )
     assert lock.releases == 1
@@ -134,6 +151,7 @@ async def test_the_microphone_is_cued_open_and_cued_shut():
         recorder=FakeRecorder(SPOKEN, calls=calls),
         transcriber=FakeTranscriber(text="run the tests", reachable=True),
         lock=FakeMicLock(),
+        speaker=FakeSpeaker(),
         cue=Cue(start=CUE_START, end=CUE_END, spawn=player.spawn),
     )
 
@@ -150,6 +168,7 @@ async def test_the_cue_waits_for_the_microphone_lock():
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(reachable=True),
             lock=FakeMicLock(busy_with=99),
+            speaker=FakeSpeaker(),
             cue=Cue(start=CUE_START, end=CUE_END, spawn=player.spawn),
         )
 
@@ -164,6 +183,7 @@ async def test_a_cue_that_will_not_play_does_not_cost_the_recording():
         recorder=FakeRecorder(SPOKEN),
         transcriber=FakeTranscriber(text="run the tests", reachable=True),
         lock=FakeMicLock(),
+        speaker=FakeSpeaker(),
         cue=Cue(start=CUE_START, end=CUE_END, spawn=player.spawn),
     )
 
@@ -197,13 +217,14 @@ def _quiet_logging(monkeypatch) -> None:
     monkeypatch.setattr(talk_module, "configure_logging", lambda plugin: None)
 
 
-async def _dictate(supervisor, transcriber, lock=None, settings=None) -> str:
+async def _dictate(supervisor, transcriber, lock=None, settings=None, speaker=None) -> str:
     return await dictate(
         settings if settings is not None else Settings(),
         supervisor=supervisor,
         recorder=FakeRecorder(SPOKEN),
         transcriber=transcriber,
         lock=lock if lock is not None else FakeMicLock(),
+        speaker=speaker if speaker is not None else FakeSpeaker(),
         cue=SILENT,
     )
 
@@ -246,6 +267,7 @@ async def test_the_speech_server_is_given_back_when_the_recording_fails():
             supervisor,
             FakeTranscriber(reachable=True),
             lock=FakeMicLock(busy_with=99),
+            speaker=FakeSpeaker(),
         )
 
     assert supervisor.registrations == 1
@@ -456,6 +478,7 @@ async def test_a_talk_that_fails_before_recording_writes_one_failed_row(
             recorder=FakeRecorder(SPOKEN),
             transcriber=transcriber,
             lock=lock,
+            speaker=FakeSpeaker(),
             cue=SILENT,
             telemetry=telemetry,
         )
@@ -472,6 +495,7 @@ async def test_a_busy_microphone_writes_one_refused_row(tmp_path):
             recorder=FakeRecorder(SPOKEN),
             transcriber=FakeTranscriber(reachable=True),
             lock=FakeMicLock(busy_with=99),
+            speaker=FakeSpeaker(),
             cue=SILENT,
             telemetry=telemetry,
         )
@@ -490,6 +514,7 @@ async def test_a_failed_transcription_keeps_the_recordings_length(tmp_path):
             recorder=FakeRecorder(recording),
             transcriber=FakeTranscriber(reachable=True, error=TranscriptionFailed("boom")),
             lock=FakeMicLock(),
+            speaker=FakeSpeaker(),
             cue=SILENT,
             telemetry=telemetry,
         )
@@ -520,3 +545,60 @@ def test_the_command_file_names_its_host_to_the_launcher(tmp_path):
         check=True,
     )
     assert result.stdout == "claude-code"
+
+
+async def test_the_speakers_are_held_for_the_recording_and_free_before_the_transcript():
+    """A sentence another process is playing finishes before the microphone opens, none
+    starts while it is open, and reading can resume while the words are transcribed."""
+    calls: list[str] = []
+    transcriber = FakeTranscriber(text="run the tests", reachable=True)
+    transcriber.calls = calls
+
+    await capture(
+        Settings(),
+        recorder=FakeRecorder(SPOKEN, calls=calls),
+        transcriber=transcriber,
+        lock=FakeMicLock(),
+        speaker=FakeSpeaker(calls),
+        cue=Cue(start=CUE_START, end=CUE_END, spawn=FakePlayer(calls).spawn),
+    )
+
+    assert calls == [
+        "speaker",
+        "cue-start",
+        "record",
+        "cue-end",
+        "speaker-release",
+        "transcribe",
+    ]
+
+
+async def test_speakers_that_never_come_free_leave_one_refused_row(tmp_path, monkeypatch):
+    monkeypatch.setattr(speakers, "SPEAKER_WAIT_S", 0.05)
+    telemetry = _telemetry(tmp_path)
+    lock = FakeMicLock()
+
+    with pytest.raises(SpeakersBusyError):
+        await dictate(
+            Settings(),
+            supervisor=FakeSupervisor(),
+            recorder=FakeRecorder(SPOKEN),
+            transcriber=FakeTranscriber(reachable=True),
+            lock=lock,
+            speaker=FakeSpeaker(busy=True),
+            cue=SILENT,
+            telemetry=telemetry,
+        )
+
+    assert _rows(telemetry) == [("talk", "refused")]
+    assert (lock.held, lock.releases) == (False, 1)
+
+
+def test_speakers_that_never_come_free_reach_the_prompt_as_one_walkie_line(monkeypatch, capsys):
+    _speaking(monkeypatch, error=SpeakersBusyError(60.0))
+
+    with pytest.raises(SystemExit) as exit_info:
+        main()
+
+    assert exit_info.value.code == 1
+    assert capsys.readouterr().out.startswith("walkie: another program kept speaking")

@@ -157,14 +157,17 @@ class FakeTranscriber:
 
 
 class FakeMicLock:
-    def __init__(self, busy_with: int | None = None) -> None:
+    def __init__(self, busy_with: int | None = None, error: OSError | None = None) -> None:
         self.busy_with = busy_with
+        self.error = error
         self.held = False
         self.acquires = 0
         self.releases = 0
 
     def acquire(self) -> None:
         self.acquires += 1
+        if self.error is not None:
+            raise self.error
         if self.busy_with is not None:
             raise MicrophoneBusy(self.busy_with)
         self.held = True
@@ -215,3 +218,29 @@ class FakePlayer:
             raise self._error
         label = Path(args[0]).stem
         return FinishedSound(self._code, lambda: self.calls.append(label))
+
+
+class FakeSpeaker:
+    """The cross-process speaker lock: notes when it is taken and given back, and can be
+    told to stay busy, in which case a claim waits until its caller gives up."""
+
+    def __init__(self, calls: list[str] | None = None, *, busy: bool = False) -> None:
+        self.calls = calls if calls is not None else []
+        self.busy = busy
+        self.held = False
+        self.acquires = 0
+        self.releases = 0
+
+    async def acquire(self, stopped: asyncio.Event) -> bool:
+        self.acquires += 1
+        if self.busy:
+            await stopped.wait()
+            return False
+        self.held = True
+        self.calls.append("speaker")
+        return True
+
+    def release(self) -> None:
+        self.releases += 1
+        self.held = False
+        self.calls.append("speaker-release")

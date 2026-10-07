@@ -14,7 +14,9 @@ import time
 from typing import NoReturn
 
 from speak_core.engines.asr import Liveness, NemoTranscriber, Transcriber, TranscriptionFailed
+from speak_core.queue import Speaker
 from speak_core.runtime import configure_logging, supervisor_for
+from speak_core.speaker import SpeakerLock
 from speak_core.supervisor import NemoSupervisor, process_is_alive
 from speak_core.telemetry import ping as telemetry_ping
 from speak_core.telemetry import wiring as telemetry_wiring
@@ -25,6 +27,7 @@ from walkie.cue import Cue
 from walkie.listening import build_cue, build_recorder, capture_limits, transcription_timeout
 from walkie.miclock import MicLock, MicrophoneBusy
 from walkie.server import VERSION
+from walkie.speakers import SpeakersBusyError, holding
 from walkie.telemetry import compose as telemetry_compose
 from walkie.telemetry.contract import IDENTITY
 from walkie.telemetry.session import TelemetrySession
@@ -65,6 +68,7 @@ async def capture(
     recorder: Recorder,
     transcriber: Transcriber,
     lock: MicLock,
+    speaker: Speaker,
     cue: Cue,
     telemetry: TelemetrySession | None = None,
 ) -> str:
@@ -96,14 +100,20 @@ async def capture(
 
     recording: Recording | None = None
     try:
-        # Cued only once the microphone is this process's to open, and cued shut when
-        # recording stops rather than when the transcript comes back.
-        async with cue.around_recording() as outcome:
-            recording = await recorder.record(capture_limits(settings))
-            # The closing sound is the only report an empty capture gets before the
-            # transcript would have arrived, so the outcome has to be set inside the
-            # bracket rather than acted on after it.
-            outcome.heard = recording.has_speech
+        try:
+            # The speakers are this process's while the microphone is open, so a
+            # sentence another process is playing finishes first and none starts until
+            # the recording ends. Cued only once both are held, and cued shut when
+            # recording stops rather than when the transcript comes back.
+            async with holding(speaker), cue.around_recording() as outcome:
+                recording = await recorder.record(capture_limits(settings))
+                # The closing sound is the only report an empty capture gets before the
+                # transcript would have arrived, so the outcome has to be set inside the
+                # bracket rather than acted on after it.
+                outcome.heard = recording.has_speech
+        except SpeakersBusyError:
+            _note(telemetry, "refused")
+            raise
         logger.info("capture: %s", describe(recording))
         if not recording.has_speech:
             _note(telemetry, "heard_nothing", device_name=recording.device, wav=recording.wav)
@@ -140,6 +150,7 @@ async def dictate(
     recorder: Recorder,
     transcriber: Transcriber,
     lock: MicLock,
+    speaker: Speaker,
     cue: Cue,
     telemetry: TelemetrySession | None = None,
 ) -> str:
@@ -167,6 +178,7 @@ async def dictate(
             recorder=recorder,
             transcriber=transcriber,
             lock=lock,
+            speaker=speaker,
             cue=cue,
             telemetry=telemetry,
         )
@@ -246,6 +258,7 @@ async def _run(settings: Settings) -> str:
                 timeout=transcription_timeout(settings),
             ),
             lock=MicLock(state_dir=settings.state_dir, is_alive=process_is_alive),
+            speaker=SpeakerLock(shared_dir=settings.server.shared_dir),
             cue=build_cue(settings),
             telemetry=telemetry,
         )
@@ -279,7 +292,13 @@ def main() -> None:
     settings = Settings.from_env(os.environ)
     try:
         text = asyncio.run(_run(settings))
-    except (MicrophoneBusy, RecorderUnavailable, TranscriptionFailed, OSError) as error:
+    except (
+        MicrophoneBusy,
+        SpeakersBusyError,
+        RecorderUnavailable,
+        TranscriptionFailed,
+        OSError,
+    ) as error:
         # OSError is in the list because the state directory and the microphone are
         # both filesystem-backed: an unwritable one would otherwise print a
         # traceback into the prompt as if the user had typed it.
