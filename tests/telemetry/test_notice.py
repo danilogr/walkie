@@ -35,7 +35,9 @@ def test_a_notice_shown_out_of_band_since_startup_is_not_handed_out_again():
 def test_the_text_names_the_runnable_commands_and_never_the_content():
     for command in ("/walkie:telemetry off", "/walkie:telemetry local", "/walkie:stats"):
         assert command in TEXT
-    assert "never any audio" in TEXT
+    flat = " ".join(TEXT.split())
+    assert "never sends what you or the agent say, or any audio" in flat
+    assert "stays in walkie's store on this machine" in flat
 
 
 def served(notice: Notice, *, listening: bool = False) -> object:

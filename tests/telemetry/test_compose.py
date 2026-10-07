@@ -1,6 +1,7 @@
 """walkie's telemetry session: the install, then its own `sessions` row - what both
 `__main__` and `talk` are handed - built so that nothing in it can stop walkie."""
 
+import sqlite3
 from pathlib import Path
 
 from speak_core.config import ServerSettings, VoiceSettings
@@ -88,6 +89,27 @@ def test_a_corrupt_store_is_moved_aside_and_collection_starts_again(tmp_path, ca
     assert (state / "telemetry.db.corrupt").read_bytes() == garbage
     assert len(store.sessions_by_id(session.conn, [session.session_id])) == 1
     assert "damaged" in caplog.text
+
+
+def test_corruption_first_found_when_the_session_is_recorded_sets_the_store_aside(
+    tmp_path, monkeypatch
+):
+    real = store.insert_session
+    calls = []
+
+    def damaged_once(*args: object, **kwargs: object) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            error = sqlite3.DatabaseError("database disk image is malformed")
+            error.sqlite_errorcode = sqlite3.SQLITE_CORRUPT
+            raise error
+        real(*args, **kwargs)
+
+    monkeypatch.setattr(store, "insert_session", damaged_once)
+    session = built(tmp_path)
+    assert session is not None
+    assert (tmp_path / "state" / "telemetry.db.corrupt").exists()
+    assert len(store.sessions_by_id(session.conn, [session.session_id])) == 1
 
 
 def test_a_damaged_store_is_set_aside_with_its_sidecars(tmp_path):

@@ -78,8 +78,13 @@ def build(
     platform_name = host_platform if host_platform is not None else sys.platform
     path = db_path(settings.state_dir)
 
+    harness, harness_version = wiring.detect_harness(env, IDENTITY)
+    session_id = str(uuid.uuid4())
+
     def start() -> wiring.Install | None:
-        return wiring.start_install(
+        """The install, with this process's session row written; the store is closed if
+        the row cannot be."""
+        install = wiring.start_install(
             env,
             IDENTITY,
             SCHEMA,
@@ -87,7 +92,31 @@ def build(
             plugin_version=plugin_version,
             host_platform=platform_name,
         )
+        if install is None:
+            return None
+        try:
+            store.insert_session(
+                install.conn,
+                SCHEMA,
+                {
+                    "session_id": session_id,
+                    "install_id": install.consent.install_id,
+                    "started_at": store.now_iso(),
+                    "plugin_version": plugin_version,
+                    "tts_engine": tts_engine,
+                    "asr_engine": "nemo",
+                    # Always true: listening is part of walkie. The contract requires it.
+                    "listen_enabled": True,
+                    "harness": harness,
+                    "harness_version": harness_version,
+                },
+            )
+        except sqlite3.Error:
+            install.conn.close()
+            raise
+        return install
 
+    tts_engine = settings.speech.engine[:TTS_ENGINE_MAX_LENGTH]
     try:
         try:
             install = start()
@@ -109,31 +138,6 @@ def build(
         logger.warning("telemetry: the local store is unusable; collecting nothing: %s", error)
         return None
     if install is None:
-        return None
-
-    harness, harness_version = wiring.detect_harness(env, IDENTITY)
-    tts_engine = settings.speech.engine[:TTS_ENGINE_MAX_LENGTH]
-    session_id = str(uuid.uuid4())
-    try:
-        store.insert_session(
-            install.conn,
-            SCHEMA,
-            {
-                "session_id": session_id,
-                "install_id": install.consent.install_id,
-                "started_at": store.now_iso(),
-                "plugin_version": plugin_version,
-                "tts_engine": tts_engine,
-                "asr_engine": "nemo",
-                # Always true: listening is part of walkie. The contract requires it.
-                "listen_enabled": True,
-                "harness": harness,
-                "harness_version": harness_version,
-            },
-        )
-    except sqlite3.Error as error:
-        logger.warning("telemetry: could not record the session; collecting nothing: %s", error)
-        install.conn.close()
         return None
     return TelemetrySession(
         conn=install.conn,

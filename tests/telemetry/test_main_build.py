@@ -64,6 +64,12 @@ def captured(monkeypatch):
     return spawned, served
 
 
+def assert_no_consent_or_ping_files(env: dict[str, str]) -> None:
+    config = IDENTITY.config_dir(env, host_platform=sys.platform)
+    assert not (config / "consent.json").exists()
+    assert not (config / "ping.json").exists()
+
+
 def run_build(captured, env: dict[str, str]):
     spawned, served = captured
     entry.build(Settings.from_env(env), env)
@@ -85,14 +91,17 @@ def test_nothing_is_collected_pinged_or_shipped_while_the_notice_is_due(tmp_path
     assert spawned == []
     assert served["telemetry"] is None
     assert not (tmp_path / "state" / "telemetry.db").exists()
+    assert_no_consent_or_ping_files(env)
     shown = served["notice"].take()  # type: ignore[attr-defined]
     assert shown is not None and TEXT in shown
 
 
 def test_nothing_is_collected_pinged_or_shipped_under_do_not_track(tmp_path, captured):
-    spawned, served = run_build(captured, env_for(tmp_path, DO_NOT_TRACK="1"))
+    env = env_for(tmp_path, DO_NOT_TRACK="1")
+    spawned, served = run_build(captured, env)
     assert spawned == []
     assert served["telemetry"] is None
+    assert_no_consent_or_ping_files(env)
     assert served["notice"].take() is None  # type: ignore[attr-defined]
 
 
@@ -152,6 +161,7 @@ async def test_talk_collects_and_pings_nothing_while_the_notice_is_due(tmp_path,
     assert seen["telemetry"] is None
     assert pings == []
     assert not (tmp_path / "state" / "telemetry.db").exists()
+    assert_no_consent_or_ping_files(env)
 
 
 async def test_talk_collects_and_pings_once_the_notice_is_shown(tmp_path, dictated):
@@ -170,6 +180,7 @@ async def test_talk_under_do_not_track_keeps_and_sends_nothing(tmp_path, dictate
     assert seen["telemetry"] is None
     assert pings == []
     assert not IDENTITY.config_dir(env, host_platform=sys.platform).exists()
+    assert_no_consent_or_ping_files(env)
 
 
 async def test_a_corrupt_store_does_not_stop_talk(tmp_path, dictated):

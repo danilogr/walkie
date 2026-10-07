@@ -124,7 +124,6 @@ async def test_nothing_is_recorded_before_the_notice_and_the_first_reply_carries
         assert TEXT in result.content[0].text
         again = await session.call_tool("speak", {"text": "again"})
         assert TEXT not in again.content[0].text
-        await asyncio.sleep(0.5)
 
     assert not (state_dir / "telemetry.db").exists()
     assert notice.due(_env(state_dir, home), IDENTITY, host_platform=sys.platform) is False

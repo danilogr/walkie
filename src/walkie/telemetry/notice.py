@@ -11,8 +11,9 @@ from collections.abc import Callable
 TELEMETRY_URL = "https://github.com/danilogr/walkie/blob/main/TELEMETRY.md"
 
 TEXT = f"""walkie collects anonymous usage data: which features you use, how long speech
-and listening take on your machine, and why they fail (never what you or the agent
-say, and never any audio).
+and listening take on your machine, and why they fail. It never sends what you or
+the agent say, or any audio; the text of what was spoken and heard stays in walkie's
+store on this machine (see /walkie:stats).
 
   /walkie:telemetry off     collect nothing; send only an anonymous install count
   /walkie:telemetry local   keep the data; send only an anonymous install count
