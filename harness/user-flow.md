@@ -191,8 +191,11 @@ Then, in the background, once the session's event loop is running:
 
 When the session ends, by stdin closing or by SIGTERM or SIGHUP, the lifespan's shutdown
 writes `ended_at`, which puts the session back in the backlog; the next session ships it.
-A store that cannot be opened (corrupt, locked, unwritable) means this process collects
-nothing; walkie itself runs on.
+A store SQLite reports as damaged is moved aside to `telemetry.db.corrupt` and a new one
+started, so collection goes on; its unshipped rows are lost. A store that cannot be
+opened for any other reason (locked, unwritable) means this process collects nothing.
+Either way walkie itself runs on. `/walkie:stats` on a damaged store says so and that
+the next walkie session that collects telemetry moves it aside.
 
 ## The shared speech server
 
@@ -211,4 +214,5 @@ The lock is an atomic `mkdir`, so exactly one starter wins. A recorded pid that 
 longer exists is reclaimed. Models are fixed when the server starts: a session that
 wants transcription and finds a voice-only server cannot upgrade it, and since the
 server only stops when the last client leaves, restarting one session does not help
-while others are attached.
+while others are attached. A server started by hand is used as it is and never stopped
+by walkie; one without the transcription model has to be restarted with it.

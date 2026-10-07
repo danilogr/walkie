@@ -92,12 +92,14 @@ NO_ASR = """The speech server is running without a transcription model, so there
 to listen with. A server's models are chosen when it starts and cannot change while it
 runs, so this one will not gain transcription on its own.
 
-Either the model was never downloaded - run /walkie:setup to pull it - or this shared
-server was started by a session that had voice input switched off. It stops only when
-the last session using it exits, so restarting one session does not help while others
-are still attached: close the other Claude Code sessions using walkie or voicebox, or stop the
-server process recorded in server.json in the shared speak-core state directory. The next listen
-then starts one with transcription."""
+Either the model was never downloaded - run /walkie:setup to pull it - or the server
+was started without it. A server you started yourself is used as it is and never
+stopped by walkie: restart it with the transcription model. A shared server started by
+a session that had voice input switched off stops only when the last session using it
+exits, so restarting one session does not help while others are still attached: close
+the other Claude Code sessions using walkie or voicebox, or stop the server process
+recorded in server.json in the shared speak-core state directory. The next listen then
+starts one with transcription."""
 
 STILL_SPEAKING = (
     "the speech queue is wedged - nothing finished playing while waiting for it ({pending}) "

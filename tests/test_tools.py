@@ -74,3 +74,10 @@ async def test_no_description_arrives_with_source_indentation():
 async def test_every_tool_is_described():
     for tool in (await tools_by_name()).values():
         assert tool.description and len(tool.description) > 40
+
+
+def test_the_no_transcription_message_covers_a_server_started_by_hand():
+    """walkie uses whatever answers on the port and never stops a server it has no
+    record of, so closing sessions cannot help with one the user started."""
+    assert "started yourself" in tools.NO_ASR
+    assert "restart it with the transcription model" in tools.NO_ASR

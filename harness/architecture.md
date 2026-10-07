@@ -118,8 +118,8 @@ pings or ships. Once it has, shipping and the ping run once per MCP session, sch
 from `create_server`'s lifespan rather than from `__main__.build()` itself: `build()` runs
 before the event loop starts, so nothing there can call `asyncio.create_task`.
 `/walkie:talk` sends the ping alongside its recording but never ships; the next MCP
-session ships its rows. A build whose version is not a release collects and sends
-nothing.
+session ships its rows. A build whose version is not a release collects locally and
+sends nothing.
 
 The lifespan's shutdown is what closes a session row, so `__main__.serve_stdio` turns
 SIGTERM and SIGHUP into a cancellation that unwinds through it, as Ctrl-C does. Left at
@@ -403,10 +403,15 @@ host closed the pipe.
   re-enable telemetry someone switched off — and so must the user's own recordings.
 
 - **A corrupt store, or a value the contract would refuse, costs telemetry, not walkie.**
-  `compose.build` catches `OSError` and `sqlite3.Error` and collects nothing; a model
-  name longer than the contract's 64 characters is left out rather than cut, because a
-  cut name is a different, wrong one. The contract tests read every pattern the way the
-  server's ajv does, where `$` does not match before a trailing newline.
+  A store SQLite reports as damaged (`SQLITE_CORRUPT`, `SQLITE_NOTADB`), whether opening
+  it or writing the session row finds out, is moved aside to `telemetry.db.corrupt`, with
+  its sidecar files, and a new one is started: left in place it would stop collection in
+  every later session. Its unshipped rows are lost with it. Any other `OSError` or
+  `sqlite3.Error` (locked, unwritable) costs this process its telemetry and leaves the
+  store as it is. `compose.build` never raises. A model name longer than the contract's
+  64 characters is left out rather than cut, because a cut name is a different, wrong
+  one. The contract tests read every pattern the way the server's ajv does, where `$`
+  does not match before a trailing newline.
 
 - **walkie has no marketplace of its own.** It is listed second in voicebox's
   `voicebox-marketplace` as a GitHub source, so Claude Code runs it from a clone in its

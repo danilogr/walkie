@@ -20,6 +20,11 @@ def test_plugin_json_pyproject_and_the_server_agree_on_1_0_0():
     assert plugin["version"] == project()["project"]["version"] == VERSION == "1.0.0"
 
 
+def test_plugin_json_names_its_author():
+    plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+    assert plugin["author"] == {"name": "Danilo Gasques"}
+
+
 def test_the_marketplace_lives_in_voicebox_not_here():
     assert not (ROOT / ".claude-plugin" / "marketplace.json").exists()
 

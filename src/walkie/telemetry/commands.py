@@ -73,7 +73,8 @@ def unreadable(path: Path, error: sqlite3.Error) -> str:
     if is_corrupt(error):
         return (
             f"The telemetry store {path} is damaged and cannot be read ({error}). The next "
-            f"walkie session moves it aside to {path.name}{CORRUPT_SUFFIX} and starts a "
-            "new one; the usage recorded in it is not shown."
+            "walkie session that collects telemetry moves it aside to "
+            f"{path.name}{CORRUPT_SUFFIX} and starts a new one; the usage recorded in it is "
+            "not shown."
         )
     return f"The telemetry store {path} cannot be read right now ({error}); try again."

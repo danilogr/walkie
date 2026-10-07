@@ -78,7 +78,10 @@ def test_stats_reads_the_store_in_the_state_dir(isolated, capsys):
 @pytest.mark.parametrize(
     ("make", "says"),
     [
-        (lambda db: db.write_bytes(b"this is not a database" * 500), "moves it aside"),
+        (
+            lambda db: db.write_bytes(b"this is not a database" * 500),
+            "The next walkie session that collects telemetry moves it aside",
+        ),
         (lambda db: db.mkdir(), "cannot be read right now"),
     ],
     ids=["corrupt", "unopenable"],

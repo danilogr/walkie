@@ -2,5 +2,8 @@
   "name": "walkie",
   "version": "1.0.0",
   "description": "Talk with your coding agent: it speaks one short sentence when a task finishes, when it is blocked or when it needs an answer, and listens to your reply. /walkie:talk dictates a prompt; /walkie:converse talks for a whole session. Runs entirely on your machine, powered by NVIDIA NeMo-Speech.cpp.",
+  "author": {
+    "name": "Danilo Gasques"
+  },
   "repository": "https://github.com/danilogr/walkie"
 }
