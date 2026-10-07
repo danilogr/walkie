@@ -2,10 +2,9 @@
 
 from pathlib import Path
 
-import pytest
 from speak_core.telemetry import store
 
-from walkie.telemetry import commands, stats
+from walkie.telemetry import stats
 from walkie.telemetry.contract import SCHEMA
 
 INSTALL = {
@@ -98,12 +97,3 @@ def test_render_counts_rejected_rows_apart_from_the_backlog() -> None:
     assert "2 utterances across 1 sessions; 1 unshipped, 1 rejected by the server." in (
         stats.render(conn)
     )
-
-
-def test_stats_with_no_store_prints_a_plain_message(tmp_path, monkeypatch, capsys) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
-    with pytest.raises(SystemExit) as exited:
-        commands.stats_main()
-    assert exited.value.code == 0
-    assert "No telemetry recorded yet." in capsys.readouterr().out

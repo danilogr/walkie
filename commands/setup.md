@@ -34,5 +34,7 @@ voicebox when both are installed.
    uses the neural voice.
 7. Offer to list the available voices with the `list_voices` tool and to set one
    with `set_voice`.
+8. Run `uv run --directory "${CLAUDE_PLUGIN_ROOT}" --quiet walkie-telemetry notice` and
+   show its output word for word: it is walkie's one-time telemetry notice.
 
 Do not start the server yourself and do not edit the user's shell profile without asking.

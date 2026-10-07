@@ -6,7 +6,6 @@ including that every `-- LOCAL` column is in `local_columns` and so never upload
 """
 
 import importlib.resources
-from collections.abc import Mapping
 from pathlib import Path
 
 from speak_core.telemetry.identity import TelemetryIdentity
@@ -102,6 +101,6 @@ IDENTITY = TelemetryIdentity(
 DB_FILENAME = "telemetry.db"
 
 
-def db_path(env: Mapping[str, str], *, host_platform: str) -> Path:
-    """The local store: in the config directory, beside consent."""
-    return IDENTITY.config_dir(env, host_platform=host_platform) / DB_FILENAME
+def db_path(state_dir: Path) -> Path:
+    """The local store, in walkie's state dir; consent stays in the config dir."""
+    return state_dir / DB_FILENAME

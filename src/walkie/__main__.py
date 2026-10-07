@@ -4,7 +4,9 @@ import asyncio
 import logging
 import os
 import signal
+import sqlite3
 import sys
+from collections.abc import Coroutine, Mapping
 from typing import Protocol
 
 from mcp.server.mcpserver import MCPServer
@@ -15,6 +17,7 @@ from speak_core.runtime import configure_logging, supervisor_for
 from speak_core.speaker import SpeakerLock
 from speak_core.supervisor import NemoSupervisor, process_is_alive
 from speak_core.telemetry import consent as telemetry_consent
+from speak_core.telemetry import notice as telemetry_notice
 from speak_core.telemetry import ping as telemetry_ping
 from speak_core.telemetry import ship as telemetry_ship
 from speak_core.telemetry import store as telemetry_store
@@ -23,10 +26,10 @@ from speak_core.telemetry import wiring as telemetry_wiring
 from walkie.config import PLUGIN, Settings
 from walkie.listening import build_cue, build_recorder, capture_limits, transcription_timeout
 from walkie.miclock import MicLock
-from walkie.server import VERSION as PLUGIN_VERSION
-from walkie.server import Ears, create_server
+from walkie.server import VERSION, Ears, create_server
 from walkie.telemetry import compose as telemetry_compose
 from walkie.telemetry.contract import IDENTITY, SCHEMA, db_path
+from walkie.telemetry.notice import Notice
 
 logger = logging.getLogger(__name__)
 
@@ -71,17 +74,16 @@ def build_supervisor(settings: Settings) -> NemoSupervisor | None:
     return supervisor_for(settings.server)
 
 
-async def _ship_backlog() -> None:
-    """Ship once, at session start, off the hot path - failures leave rows
-    unshipped for the next session to retry (spec 7, 11)."""
-    env = dict(os.environ)
+async def _ship_backlog(env: Mapping[str, str], settings: Settings) -> None:
+    """Ship once, at session start, off the hot path. A failure leaves rows unshipped
+    for the next session to retry."""
     debug = IDENTITY.debug_requested(env)
     consented = telemetry_consent.load_consent(env, IDENTITY, host_platform=sys.platform)
     if not consented.collects or not (consented.uploads or debug):
         return
     try:
-        conn = telemetry_store.connect(db_path(env, host_platform=sys.platform), SCHEMA)
-    except OSError as error:
+        conn = telemetry_store.connect(db_path(settings.state_dir), SCHEMA)
+    except (OSError, sqlite3.Error) as error:
         logger.debug("telemetry: could not open the local store to ship: %s", error)
         return
     try:
@@ -100,44 +102,58 @@ async def _ship_backlog() -> None:
         conn.close()
 
 
-async def _send_ping(ping: telemetry_ping.Ping) -> None:
+async def _send_ping(ping: telemetry_ping.Ping, env: Mapping[str, str]) -> None:
     """The install ping, in the background. A failure is due again next session."""
     try:
         await telemetry_ping.send(
-            ping,
-            transport=telemetry_wiring.http_transport,
-            debug=IDENTITY.debug_requested(os.environ),
+            ping, transport=telemetry_wiring.http_transport, debug=IDENTITY.debug_requested(env)
         )
     except Exception:
         logger.debug("telemetry: the install ping failed", exc_info=True)
 
 
-def build(settings: Settings) -> MCPServer:
-    """Wire the engine, queue, supervisor and ears together."""
+def _spawn(coroutine: Coroutine[object, object, object]) -> None:
+    """Run in the background, keeping a reference so the task is not collected midway."""
+    task = asyncio.create_task(coroutine)
+    _background.add(task)
+    task.add_done_callback(_background.discard)
+
+
+def build(settings: Settings, env: Mapping[str, str]) -> MCPServer:
+    """Wire the engine, queue, supervisor, ears and telemetry together."""
     supervisor = build_supervisor(settings)
+
+    # Nothing is collected or sent until the first-run notice has been shown: that keeps
+    # "shown before anything is sent" literal.
+    notice_due = telemetry_notice.due(env, IDENTITY, host_platform=sys.platform)
+    ping = None
+    telemetry = None
+    # A build whose version is not a release would have every request refused.
+    sends = telemetry_compose.is_release(VERSION)
+    if not sends:
+        logger.info("telemetry: %s is not a release build; nothing will be sent", VERSION)
+    if not notice_due:
+        if sends:
+            ping = telemetry_ping.due(
+                env,
+                IDENTITY,
+                plugin_version=VERSION,
+                host_platform=sys.platform,
+                ingest_url=IDENTITY.ingest_url(env),
+            )
+        telemetry = telemetry_compose.build(env, settings=settings, plugin_version=VERSION)
+    notice = Notice(
+        pending=notice_due,
+        mark_shown=lambda: telemetry_notice.mark_shown(env, IDENTITY, host_platform=sys.platform),
+        still_due=lambda: telemetry_notice.due(env, IDENTITY, host_platform=sys.platform),
+    )
 
     def start_speech_server() -> None:
         """Kick off a cold start without waiting: this sentence goes out through `say`."""
-        if supervisor is None:
-            return
-        task = asyncio.create_task(supervisor.ensure_running())
-        _background.add(task)
-        task.add_done_callback(_background.discard)
+        if supervisor is not None:
+            _spawn(supervisor.ensure_running())
 
     engine = build_engine(settings.speech, settings.server, on_unavailable=start_speech_server)
-
-    # Decided before `telemetry_compose.build`, which may create the consent file this
-    # reads to tell an install from an upgrade.
-    ping = telemetry_ping.due(
-        os.environ,
-        IDENTITY,
-        plugin_version=PLUGIN_VERSION,
-        host_platform=sys.platform,
-        ingest_url=IDENTITY.ingest_url(os.environ),
-    )
-    telemetry = telemetry_compose.build(
-        os.environ, settings=settings, plugin_version=PLUGIN_VERSION
-    )
 
     def on_finish(outcome: UtteranceOutcome) -> None:
         if telemetry is not None:
@@ -147,21 +163,12 @@ def build(settings: Settings) -> MCPServer:
     queue = SpeechQueue(prepare=engine.prepare, on_finish=on_finish, speaker=speaker)
 
     def schedule_sends() -> None:
-        """Deferred to the server's lifespan: `build()` runs before `server.run()`
-        starts an event loop, so `asyncio.create_task` cannot be called from here.
-
-        The ping goes whatever the telemetry mode; the backlog only when telemetry
-        collects at all.
-        """
-        sends = []
+        """Deferred to the server's lifespan: `build()` runs before an event loop exists.
+        The ping goes whatever the telemetry mode; the backlog only when it collects."""
         if ping is not None:
-            sends.append(_send_ping(ping))
-        if telemetry is not None:
-            sends.append(_ship_backlog())
-        for send in sends:
-            task = asyncio.create_task(send)
-            _background.add(task)
-            task.add_done_callback(_background.discard)
+            _spawn(_send_ping(ping, env))
+        if telemetry is not None and sends:
+            _spawn(_ship_backlog(env, settings))
 
     return create_server(
         settings=settings,
@@ -170,6 +177,7 @@ def build(settings: Settings) -> MCPServer:
         supervisor=supervisor,
         ears=build_ears(settings, speaker=speaker),
         telemetry=telemetry,
+        notice=notice,
         on_session_start=schedule_sends,
     )
 
@@ -243,9 +251,10 @@ def run(server: StdioServer) -> None:
 
 def main() -> None:
     configure_logging(PLUGIN)
-    settings = Settings.from_env(os.environ)
+    env = dict(os.environ)
+    settings = Settings.from_env(env)
     try:
-        server = build(settings)
+        server = build(settings, env)
     except ValueError as error:
         logger.error("%s", error)
         raise SystemExit(2) from error

@@ -27,6 +27,7 @@ from walkie.config import Settings
 from walkie.cue import Cue
 from walkie.miclock import MicLock, MicrophoneBusy
 from walkie.speakers import SpeakersBusyError, holding
+from walkie.telemetry.notice import Notice
 from walkie.telemetry.session import TelemetrySession
 
 logger = logging.getLogger(__name__)
@@ -234,6 +235,7 @@ def create_server(
     rng: random.Random | None = None,
     ears: Ears | None = None,
     telemetry: TelemetrySession | None = None,
+    notice: Notice | None = None,
     on_session_start: Callable[[], None] | None = None,
 ) -> MCPServer:
     session = SessionState(
@@ -242,6 +244,13 @@ def create_server(
         randomize=settings.speech.randomize_voice,
     )
     roll = rng or random.Random()
+
+    def reply(text: str) -> str:
+        """Every successful reply but `listen`'s goes through here, so the first one of a
+        session that owes the first-run notice carries it. `listen`'s reply is the
+        user's own words and is never mixed with anything else."""
+        shown = notice.take() if notice is not None else None
+        return text if shown is None else f"{text}\n\n{shown}"
 
     def note_heard(
         status: str,
@@ -348,19 +357,21 @@ def create_server(
             intent=intent,
         )
         if ahead == 0:
-            return f'speaking: "{spoken}"'
-        return f'queued behind {ahead} utterance{_plural(ahead)}: "{spoken}"'
+            return reply(f'speaking: "{spoken}"')
+        return reply(f'queued behind {ahead} utterance{_plural(ahead)}: "{spoken}"')
 
     @server.tool(name="list_voices", description=tools.LIST_VOICES)
     async def list_voices() -> str:
         voices = await engine.list_voices()
         active = await session_voice() or engine.default_voice or "the engine default"
         if not voices:
-            return (
+            return reply(
                 f"engine: {engine.name}; active voice: {active}. "
                 "This engine does not report voice names."
             )
-        return f"engine: {engine.name}; active voice: {active}. Available: {', '.join(voices)}."
+        return reply(
+            f"engine: {engine.name}; active voice: {active}. Available: {', '.join(voices)}."
+        )
 
     @server.tool(name="set_voice", description=tools.SET_VOICE)
     async def set_voice(
@@ -377,19 +388,19 @@ def create_server(
 
         session.voice = match or wanted
         session.randomize = False
-        return f"voice set to {session.voice} for this session"
+        return reply(f"voice set to {session.voice} for this session")
 
     @server.tool(name="stop_speaking", description=tools.STOP_SPEAKING)
     async def stop_speaking() -> str:
         dropped = await queue.stop()
-        return f"stopped; dropped {dropped} utterance{_plural(dropped)}"
+        return reply(f"stopped; dropped {dropped} utterance{_plural(dropped)}")
 
     @server.tool(name="speech_status", description=tools.SPEECH_STATUS)
     async def speech_status() -> str:
         stats = queue.stats()
         if stats.size == 0:
-            return f"nothing queued; {stats.finished} spoken so far"
-        return f"{describe_queue(stats)}; {stats.finished} spoken so far"
+            return reply(f"nothing queued; {stats.finished} spoken so far")
+        return reply(f"{describe_queue(stats)}; {stats.finished} spoken so far")
 
     if ears is not None:
         # The microphone lock is re-entrant by pid, so it separates sessions but not

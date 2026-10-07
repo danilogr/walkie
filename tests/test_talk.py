@@ -303,7 +303,7 @@ async def test_a_speech_server_that_will_not_start_names_the_fix():
 def _speaking(monkeypatch, text: str = "", error: Exception | None = None) -> None:
     """Stand in for one recording, so `main` can be driven with no microphone."""
 
-    async def run(settings) -> str:
+    async def run(settings, env) -> str:
         if error is not None:
             raise error
         return text

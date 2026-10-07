@@ -122,9 +122,9 @@ def test_utterance_finished_writes_one_out_row() -> None:
 
 
 def test_utterance_finished_clamps_an_over_ceiling_speak_row() -> None:
-    """`speak`/`listen` rows have their own, tighter ceilings than a transcription's
-    in the schema's `else` branch; an unclamped one is a 400 the server rejects,
-    which loses every row in that chunk."""
+    """`speak` rows have tighter ceilings than the schema's general ones, in its `else`
+    branch; an unclamped one is a 400 the server rejects, which loses every row in
+    that chunk."""
     session = build_session()
     outcome = UtteranceOutcome(
         text=" ".join(["hello1234"] * 25_000),  # over both the word and char ceilings
@@ -214,9 +214,8 @@ def _wav_of_seconds(seconds: int) -> bytes:
 
 def test_heard_clamps_an_over_ceiling_listen_row() -> None:
     """A `WALKIE_LISTEN_MAX_SECONDS` above ten minutes can produce a row past the
-    schema's tighter `else`-branch ceilings - the same stall the transcription
-    clamp exists to prevent, for the same reason: a 400 ends that chunk's backlog
-    and everything shipped after it."""
+    schema's tighter `else`-branch ceilings; an unclamped row is a 400 that ends that
+    chunk's backlog and everything shipped after it."""
     session = build_session()
     session.heard(
         source="listen",

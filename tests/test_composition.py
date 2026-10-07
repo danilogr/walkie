@@ -76,17 +76,17 @@ def test_listening_and_speaking_share_one_speaker_lock(monkeypatch, tmp_path):
         return object()
 
     monkeypatch.setattr(entry, "create_server", create_server)
-    settings = Settings.from_env(
-        {
-            "HOME": str(tmp_path),
-            "WALKIE_STATE_DIR": str(tmp_path / "state"),
-            "SPEAK_CORE_STATE_DIR": str(tmp_path / "core"),
-            "NEMO_AUTOSTART": "0",
-            "WALKIE_ENGINE": "command",
-            "WALKIE_COMMAND": "true",
-        }
-    )
-    entry.build(settings)
+    env = {
+        "HOME": str(tmp_path),
+        "WALKIE_STATE_DIR": str(tmp_path / "state"),
+        "SPEAK_CORE_STATE_DIR": str(tmp_path / "core"),
+        "NEMO_AUTOSTART": "0",
+        "WALKIE_ENGINE": "command",
+        "WALKIE_COMMAND": "true",
+        "DO_NOT_TRACK": "1",
+    }
+    settings = Settings.from_env(env)
+    entry.build(settings, env)
 
     speaker = served["ears"].speaker  # type: ignore[attr-defined]
     assert isinstance(speaker, SpeakerLock)
@@ -100,17 +100,17 @@ async def test_the_sessions_own_speech_waits_while_a_recording_holds_the_speaker
     sentence is not played until the recording gives the speakers back."""
     served: dict[str, object] = {}
     monkeypatch.setattr(entry, "create_server", lambda **kwargs: served.update(kwargs))
-    settings = Settings.from_env(
-        {
-            "HOME": str(tmp_path),
-            "WALKIE_STATE_DIR": str(tmp_path / "state"),
-            "SPEAK_CORE_STATE_DIR": str(tmp_path / "core"),
-            "NEMO_AUTOSTART": "0",
-            "WALKIE_ENGINE": "command",
-            "WALKIE_COMMAND": "true",
-        }
-    )
-    entry.build(settings)
+    env = {
+        "HOME": str(tmp_path),
+        "WALKIE_STATE_DIR": str(tmp_path / "state"),
+        "SPEAK_CORE_STATE_DIR": str(tmp_path / "core"),
+        "NEMO_AUTOSTART": "0",
+        "WALKIE_ENGINE": "command",
+        "WALKIE_COMMAND": "true",
+        "DO_NOT_TRACK": "1",
+    }
+    settings = Settings.from_env(env)
+    entry.build(settings, env)
     queue = served["queue"]
     player = FakePlayer()
     queue._spawn = player.spawn  # type: ignore[attr-defined]
@@ -130,7 +130,7 @@ async def test_the_sessions_own_speech_waits_while_a_recording_holds_the_speaker
         await asyncio.gather(worker, return_exceptions=True)
 
 
-async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch):
+async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch, tmp_path):
     """`/walkie:talk` wires up its own objects, and nothing else exercises that.
 
     The transcriber block is character-identical to the one in `__main__`, which is the
@@ -140,10 +140,6 @@ async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch
     builder.
     """
     import walkie.talk as talk
-
-    # `_run` also builds a telemetry session from the real environment; forcing it off
-    # keeps this test from touching the machine's actual config directory.
-    monkeypatch.setenv("WALKIE_TELEMETRY", "off")
 
     seen: dict[str, object] = {}
 
@@ -163,7 +159,7 @@ async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch
         state_dir=Path("/tmp/walkie-test"),
     )
 
-    assert await talk._run(settings) == "a transcript"
+    assert await talk._run(settings, {"HOME": str(tmp_path), "DO_NOT_TRACK": "1"}) == "a transcript"
 
     transcriber = seen["transcriber"]
     assert transcriber._base_url == "http://127.0.0.1:9999"

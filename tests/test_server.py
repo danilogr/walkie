@@ -53,9 +53,9 @@ def server_env(command: str, state_dir: str, extra_env: dict[str, str] | None = 
         "NEMO_AUTOSTART": "0",
         "WALKIE_STATE_DIR": state_dir,
         "SPEAK_CORE_STATE_DIR": state_dir,
-        # Telemetry reads its own config directory, never WALKIE_STATE_DIR; without
-        # this, every subprocess below would write to the real machine's config dir.
+        # Telemetry is off in every subprocess here.
         "WALKIE_TELEMETRY": "off",
+        "DO_NOT_TRACK": "1",
         **(extra_env or {}),
     }
 

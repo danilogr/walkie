@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Mapping
 from typing import NoReturn
 
 from speak_core.engines.asr import Liveness, NemoTranscriber, Transcriber, TranscriptionFailed
@@ -18,6 +19,7 @@ from speak_core.queue import Speaker
 from speak_core.runtime import configure_logging, supervisor_for
 from speak_core.speaker import SpeakerLock
 from speak_core.supervisor import NemoSupervisor, process_is_alive
+from speak_core.telemetry import notice as telemetry_notice
 from speak_core.telemetry import ping as telemetry_ping
 from speak_core.telemetry import wiring as telemetry_wiring
 
@@ -211,36 +213,39 @@ async def _start(supervisor: NemoSupervisor, transcriber: Transcriber) -> None:
         raise TranscriptionFailed(f"{NO_SERVER} ({error})") from error
 
 
-async def _run(settings: Settings) -> str:
+async def _run(settings: Settings, env: Mapping[str, str]) -> str:
     """Build the real collaborators and dictate against them.
 
     `/walkie:talk` is its own short-lived process rather than an MCP session, so it gets
     its own session row - and never ships: shipping is a network call, and this
-    process's whole job is to print a transcript as fast as it can. Rows it writes
-    are shipped by the next `walkie-mcp` session to start, since both read the same
-    local store.
+    process's whole job is to print a transcript as fast as it can. Rows it writes are
+    shipped by the next `walkie-mcp` session to start, since both read the same store.
 
-    The install ping is the one request it may make, because someone who only ever
-    dictates would otherwise never be counted. It runs alongside the recording and
-    is abandoned, not awaited, if it has not finished when the transcript is ready;
-    an abandoned ping is due again next time.
+    Nothing is collected or pinged until the first-run notice has been shown, and this
+    process cannot show it: its output is read as the user's own words. Once it has
+    been, the install ping is the one request this process may make, because someone
+    who only ever dictates would otherwise never be counted. It runs alongside the
+    recording and is abandoned, not awaited, if it has not finished when the transcript
+    is ready; an abandoned ping is due again next time.
     """
-    # Decided before `telemetry_compose.build`, which may create the consent file this
-    # reads to tell an install from an upgrade.
-    ping = telemetry_ping.due(
-        os.environ,
-        IDENTITY,
-        plugin_version=VERSION,
-        host_platform=sys.platform,
-        ingest_url=IDENTITY.ingest_url(os.environ),
-    )
-    telemetry = telemetry_compose.build(os.environ, settings=settings, plugin_version=VERSION)
+    ping = None
+    telemetry = None
+    if not telemetry_notice.due(env, IDENTITY, host_platform=sys.platform):
+        if telemetry_compose.is_release(VERSION):
+            ping = telemetry_ping.due(
+                env,
+                IDENTITY,
+                plugin_version=VERSION,
+                host_platform=sys.platform,
+                ingest_url=IDENTITY.ingest_url(env),
+            )
+        telemetry = telemetry_compose.build(env, settings=settings, plugin_version=VERSION)
     pinging = (
         asyncio.create_task(
             telemetry_ping.send(
                 ping,
                 transport=telemetry_wiring.http_transport,
-                debug=IDENTITY.debug_requested(os.environ),
+                debug=IDENTITY.debug_requested(env),
             )
         )
         if ping is not None
@@ -289,9 +294,10 @@ def _fail(message: str) -> NoReturn:
 
 def main() -> None:
     configure_logging(PLUGIN)
-    settings = Settings.from_env(os.environ)
+    env = dict(os.environ)
+    settings = Settings.from_env(env)
     try:
-        text = asyncio.run(_run(settings))
+        text = asyncio.run(_run(settings, env))
     except (
         MicrophoneBusy,
         SpeakersBusyError,
