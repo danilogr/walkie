@@ -12,6 +12,8 @@ from fakes import (
     FakeSpeaker,
     FakeSupervisor,
     FakeTranscriber,
+    heard_rows,
+    telemetry_session,
 )
 from walkie import speakers
 from walkie import talk as talk_module
@@ -22,7 +24,6 @@ from walkie.miclock import MicrophoneBusy
 from walkie.speakers import SpeakersBusyError
 from walkie.talk import capture, dictate, main
 from walkie.telemetry.contract import SCHEMA
-from walkie.telemetry.session import TelemetrySession
 from walkie.tools import TALK_HEARD_NOTHING
 
 # Every capture below is given a cue, and none of them makes a sound: the silent one
@@ -377,52 +378,6 @@ def test_the_command_file_branches_on_the_sentinel_talk_prints():
 # --- telemetry: every /walkie:talk attempt leaves exactly one row, however it ended ---
 
 
-def _telemetry(tmp_path: Path) -> TelemetrySession:
-    conn = store.connect(tmp_path / "telemetry.db", SCHEMA)
-    store.upsert_install(
-        conn,
-        {
-            "install_id": "install-1",
-            "first_seen_at": "2026-10-01T10:00:00Z",
-            "last_seen_at": "2026-10-01T10:00:00Z",
-            "plugin_version": "1.6.0",
-            "os": "darwin",
-            "arch": "arm64",
-            "accel": "metal",
-        },
-    )
-    store.insert_session(
-        conn,
-        SCHEMA,
-        {
-            "session_id": "session-1",
-            "install_id": "install-1",
-            "started_at": "2026-10-01T10:00:00Z",
-            "plugin_version": "1.6.0",
-            "listen_enabled": True,
-            "harness": "claude-code",
-        },
-    )
-    return TelemetrySession(
-        conn=conn,
-        install_id="install-1",
-        session_id="session-1",
-        tts_engine="say",
-        tts_model=None,
-        asr_engine="nemo",
-        asr_model="nemotron-3.5",
-    )
-
-
-def _rows(telemetry) -> list[tuple[str, str]]:
-    return [(r["source"], r["status"]) for r in store.unshipped_rows(telemetry.conn, SCHEMA.rows)]
-
-
-class UnwritableMicLock(FakeMicLock):
-    def acquire(self) -> None:
-        raise PermissionError(13, "Permission denied", "/state/mic.lock")
-
-
 class UnwritableSupervisor(FakeSupervisor):
     async def register(self) -> None:
         raise PermissionError(13, "Permission denied", "/state/sessions")
@@ -462,14 +417,20 @@ def _one_second_wav() -> bytes:
         ),
         # the state directory cannot be written, at either of the two places it is
         (UnwritableSupervisor(), FakeTranscriber(reachable=True), FakeMicLock(), None, OSError),
-        (FakeSupervisor(), FakeTranscriber(reachable=True), UnwritableMicLock(), None, OSError),
+        (
+            FakeSupervisor(),
+            FakeTranscriber(reachable=True),
+            FakeMicLock(error=PermissionError(13, "Permission denied", "/state/mic.lock")),
+            None,
+            OSError,
+        ),
     ],
     ids=["autostart-off", "will-not-start", "register-oserror", "lock-oserror"],
 )
 async def test_a_talk_that_fails_before_recording_writes_one_failed_row(
     tmp_path, supervisor, transcriber, lock, settings, error
 ):
-    telemetry = _telemetry(tmp_path)
+    telemetry = telemetry_session(tmp_path)
 
     with pytest.raises(error):
         await dictate(
@@ -483,11 +444,11 @@ async def test_a_talk_that_fails_before_recording_writes_one_failed_row(
             telemetry=telemetry,
         )
 
-    assert _rows(telemetry) == [("talk", "failed")]
+    assert heard_rows(telemetry) == [("talk", "failed")]
 
 
 async def test_a_busy_microphone_writes_one_refused_row(tmp_path):
-    telemetry = _telemetry(tmp_path)
+    telemetry = telemetry_session(tmp_path)
     with pytest.raises(MicrophoneBusy):
         await dictate(
             Settings(),
@@ -499,13 +460,13 @@ async def test_a_busy_microphone_writes_one_refused_row(tmp_path):
             cue=SILENT,
             telemetry=telemetry,
         )
-    assert _rows(telemetry) == [("talk", "refused")]
+    assert heard_rows(telemetry) == [("talk", "refused")]
 
 
 async def test_a_failed_transcription_keeps_the_recordings_length(tmp_path):
     """The audio was captured; only the model failed. Its length is what tells a
     model that fails on long recordings from one that fails on everything."""
-    telemetry = _telemetry(tmp_path)
+    telemetry = telemetry_session(tmp_path)
     recording = Recording(wav=_one_second_wav(), reason=State.DONE, has_speech=True)
 
     with pytest.raises(TranscriptionFailed):
@@ -575,7 +536,7 @@ async def test_the_speakers_are_held_for_the_recording_and_free_before_the_trans
 
 async def test_speakers_that_never_come_free_leave_one_refused_row(tmp_path, monkeypatch):
     monkeypatch.setattr(speakers, "SPEAKER_WAIT_S", 0.05)
-    telemetry = _telemetry(tmp_path)
+    telemetry = telemetry_session(tmp_path)
     lock = FakeMicLock()
 
     with pytest.raises(SpeakersBusyError):
@@ -590,7 +551,7 @@ async def test_speakers_that_never_come_free_leave_one_refused_row(tmp_path, mon
             telemetry=telemetry,
         )
 
-    assert _rows(telemetry) == [("talk", "refused")]
+    assert heard_rows(telemetry) == [("talk", "refused")]
     assert (lock.held, lock.releases) == (False, 1)
 
 
@@ -601,4 +562,4 @@ def test_speakers_that_never_come_free_reach_the_prompt_as_one_walkie_line(monke
         main()
 
     assert exit_info.value.code == 1
-    assert capsys.readouterr().out.startswith("walkie: another program kept speaking")
+    assert capsys.readouterr().out.startswith("walkie: the speakers stayed busy")

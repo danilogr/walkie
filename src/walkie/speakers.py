@@ -19,12 +19,13 @@ SPEAKER_WAIT_S = 60.0
 
 
 class SpeakersBusyError(RuntimeError):
-    """Something else kept the speakers for longer than a recording may wait."""
+    """The speakers were held, by another process or this session's own speech, for longer
+    than a recording may wait."""
 
     def __init__(self, waited: float) -> None:
         super().__init__(
-            f"another program kept speaking for {waited:g} s, so the microphone was not "
-            "opened. Wait for it to finish or stop it, then try again."
+            f"the speakers stayed busy for {waited:g} s, so the microphone was not "
+            "opened. Try again, or stop the speech that is playing."
         )
         self.waited = waited
 

@@ -1,17 +1,19 @@
 """What the composition root decides: who gets a speech server, with which models, and
 which lock a recording and the speech queue share."""
 
+import asyncio
 from pathlib import Path
 
 from speak_core.config import ServerSettings, VoiceSettings
 from speak_core.speaker import SpeakerLock
 
-from fakes import FakeSpeaker
+from fakes import FakePlayer, FakeSpeaker
 from walkie import __main__ as entry
 from walkie.__main__ import build_ears, build_supervisor
 from walkie.config import Settings
 from walkie.cue import END_SOUND
 from walkie.listening import transcription_timeout
+from walkie.speakers import holding
 
 
 def test_every_session_gets_a_speech_server_because_listening_always_needs_one():
@@ -89,6 +91,43 @@ def test_listening_and_speaking_share_one_speaker_lock(monkeypatch, tmp_path):
     speaker = served["ears"].speaker  # type: ignore[attr-defined]
     assert isinstance(speaker, SpeakerLock)
     assert speaker is served["queue"]._speaker  # type: ignore[attr-defined]
+
+
+async def test_the_sessions_own_speech_waits_while_a_recording_holds_the_speakers(
+    monkeypatch, tmp_path
+):
+    """The queue and the ears are wired to one lock: with listen holding it, the next
+    sentence is not played until the recording gives the speakers back."""
+    served: dict[str, object] = {}
+    monkeypatch.setattr(entry, "create_server", lambda **kwargs: served.update(kwargs))
+    settings = Settings.from_env(
+        {
+            "HOME": str(tmp_path),
+            "WALKIE_STATE_DIR": str(tmp_path / "state"),
+            "SPEAK_CORE_STATE_DIR": str(tmp_path / "core"),
+            "NEMO_AUTOSTART": "0",
+            "WALKIE_ENGINE": "command",
+            "WALKIE_COMMAND": "true",
+        }
+    )
+    entry.build(settings)
+    queue = served["queue"]
+    player = FakePlayer()
+    queue._spawn = player.spawn  # type: ignore[attr-defined]
+    worker = asyncio.create_task(queue.run())  # type: ignore[attr-defined]
+    try:
+        async with holding(served["ears"].speaker):  # type: ignore[attr-defined]
+            queue.enqueue("hello", voice=None, rate=None)  # type: ignore[attr-defined]
+            await asyncio.sleep(0.3)
+            assert player.commands == []
+        for _ in range(500):
+            if player.commands:
+                break
+            await asyncio.sleep(0.01)
+        assert len(player.commands) == 1
+    finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
 
 
 async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch):

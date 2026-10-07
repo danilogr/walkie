@@ -16,6 +16,8 @@ from fakes import (
     FakeRecorder,
     FakeSpeaker,
     FakeTranscriber,
+    heard_rows,
+    telemetry_session,
 )
 from walkie import server as server_module
 from walkie import speakers
@@ -63,6 +65,7 @@ def build(
     cue=None,
     speaker=None,
     mic_error=None,
+    telemetry=None,
 ) -> Rig:
     calls: list[str] = []
     queue = queue if queue is not None else FakeQueue(calls=calls)
@@ -78,6 +81,7 @@ def build(
     speaker = speaker if speaker is not None else FakeSpeaker()
     server = create_server(
         settings=Settings(listen_language=language),
+        telemetry=telemetry,
         engine=FakeEngine(),
         queue=queue,
         supervisor=None,
@@ -501,12 +505,21 @@ async def test_speakers_that_never_come_free_refuse_the_recording(monkeypatch):
     given back."""
     monkeypatch.setattr(speakers, "SPEAKER_WAIT_S", 0.05)
     rig = build(speaker=FakeSpeaker(busy=True))
-    with pytest.raises(ToolError, match="another program kept speaking"):
+    with pytest.raises(ToolError, match="the speakers stayed busy"):
         await call_listen(rig.server)
     assert rig.calls == ["drain"]
     assert rig.player.commands == []
     assert (rig.lock.held, rig.lock.releases) == (False, 1)
     assert rig.speaker.releases == 0
+
+
+async def test_speakers_that_never_come_free_leave_one_refused_row(tmp_path, monkeypatch):
+    monkeypatch.setattr(speakers, "SPEAKER_WAIT_S", 0.05)
+    telemetry = telemetry_session(tmp_path)
+    rig = build(speaker=FakeSpeaker(busy=True), telemetry=telemetry)
+    with pytest.raises(ToolError):
+        await call_listen(rig.server)
+    assert heard_rows(telemetry) == [("listen", "refused")]
 
 
 async def test_a_busy_microphone_is_refused_before_waiting_for_the_speakers():
@@ -523,11 +536,17 @@ async def test_the_speakers_are_given_back_when_the_microphone_fails():
     assert (rig.speaker.held, rig.speaker.releases) == (False, 1)
 
 
-async def test_an_unusable_microphone_lock_is_a_tool_error_that_takes_nothing():
+async def test_an_unusable_microphone_lock_is_a_tool_error_that_takes_nothing(tmp_path):
     """The lock lives on the filesystem; an unwritable state directory must reach the
     caller as one refusal, not a traceback, and must not touch the speakers."""
-    rig = build(mic_error=PermissionError("state directory is read-only"), speaker=FakeSpeaker())
+    telemetry = telemetry_session(tmp_path)
+    rig = build(
+        mic_error=PermissionError("state directory is read-only"),
+        speaker=FakeSpeaker(),
+        telemetry=telemetry,
+    )
     with pytest.raises(ToolError, match="state directory is read-only"):
         await call_listen(rig.server)
+    assert heard_rows(telemetry) == [("listen", "failed")]
     assert rig.speaker.acquires == 0
     assert rig.calls == ["drain"]

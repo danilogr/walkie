@@ -7,9 +7,12 @@ from pathlib import Path
 from speak_core.engines.asr import Liveness
 from speak_core.engines.base import Utterance
 from speak_core.queue import QueueStats
+from speak_core.telemetry import store
 
 from walkie.capture import Recording, TrackerSettings
 from walkie.miclock import MicrophoneBusy
+from walkie.telemetry.contract import SCHEMA
+from walkie.telemetry.session import TelemetrySession
 
 
 class FakeEngine:
@@ -244,3 +247,44 @@ class FakeSpeaker:
         self.releases += 1
         self.held = False
         self.calls.append("speaker-release")
+
+
+def telemetry_session(tmp_path: Path) -> TelemetrySession:
+    conn = store.connect(tmp_path / "telemetry.db", SCHEMA)
+    store.upsert_install(
+        conn,
+        {
+            "install_id": "install-1",
+            "first_seen_at": "2026-10-01T10:00:00Z",
+            "last_seen_at": "2026-10-01T10:00:00Z",
+            "plugin_version": "1.6.0",
+            "os": "darwin",
+            "arch": "arm64",
+            "accel": "metal",
+        },
+    )
+    store.insert_session(
+        conn,
+        SCHEMA,
+        {
+            "session_id": "session-1",
+            "install_id": "install-1",
+            "started_at": "2026-10-01T10:00:00Z",
+            "plugin_version": "1.6.0",
+            "listen_enabled": True,
+            "harness": "claude-code",
+        },
+    )
+    return TelemetrySession(
+        conn=conn,
+        install_id="install-1",
+        session_id="session-1",
+        tts_engine="say",
+        tts_model=None,
+        asr_engine="nemo",
+        asr_model="nemotron-3.5",
+    )
+
+
+def heard_rows(telemetry) -> list[tuple[str, str]]:
+    return [(r["source"], r["status"]) for r in store.unshipped_rows(telemetry.conn, SCHEMA.rows)]

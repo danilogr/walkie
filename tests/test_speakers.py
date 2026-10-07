@@ -28,7 +28,7 @@ async def test_they_are_given_back_when_the_body_raises():
 
 async def test_speakers_that_never_come_free_refuse_without_holding_anything():
     speaker = FakeSpeaker(busy=True)
-    with pytest.raises(SpeakersBusyError, match="another program kept speaking"):
+    with pytest.raises(SpeakersBusyError, match="the speakers stayed busy"):
         async with holding(speaker, wait=0.05):
             raise AssertionError("the body must not run")
     assert speaker.releases == 0
