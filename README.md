@@ -86,7 +86,6 @@ Environment variables, read when the server starts:
 | `WALKIE_VOICE` | engine default | a voice name, or `random` for a new one each session |
 | `WALKIE_VOICE_POOL` | the engine's pool | comma-separated voices `random` draws from |
 | `WALKIE_RATE` | engine default | words per minute, for engines that take one |
-| `WALKIE_MAX_CHARS` | `400` | longest sentence spoken, cut at a word |
 | `WALKIE_COMMAND` | unset | the program `WALKIE_ENGINE=command` runs, with the sentence as its last argument |
 | `WALKIE_INPUT_DEVICE` | system default | the microphone to record from, by name |
 | `WALKIE_LISTEN_SILENCE_MS` | `3000` | silence that ends a recording |

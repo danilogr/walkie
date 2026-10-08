@@ -9,10 +9,12 @@
 
 `speak` returns as soon as the sentence is accepted, so Claude never blocks on audio.
 
-1. The text is normalised: whitespace collapsed to one line, capped at
-   `WALKIE_MAX_CHARS` (400) at a word boundary. Empty after collapsing is an error.
+1. The text is normalised: whitespace collapsed to one line, never cut. Empty after
+   collapsing is an error. Each sentence is queued as its own utterance, so the first
+   is heard while the next is prepared.
 2. The worker asks the engine to prepare it. For `nemo` that is an HTTP request for
-   audio, written to a temp file; for `say` and `command` it is just a command line.
+   audio, or one per clause for a sentence over 250 characters, joined with a short
+   pause, written to a temp file; for `say` and `command` it is just a command line.
 3. The worker waits for the speaker lock, which another process may hold for one
    utterance at a time; a `stop_speaking` ends that wait and discards the utterance.
    Then the player is spawned and waited on. The generation counter is checked before the

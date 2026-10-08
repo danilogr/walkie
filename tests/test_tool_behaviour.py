@@ -26,10 +26,11 @@ async def test_speak_collapses_whitespace_before_queueing():
     assert queue.enqueued[0][0] == "hello there"
 
 
-async def test_speak_truncates_at_the_configured_cap():
-    server, _, queue = build(env={"WALKIE_MAX_CHARS": "11"})
-    await call(server, "speak", text="one two three four")
-    assert queue.enqueued[0][0] == "one two…"
+async def test_speak_queues_each_sentence_whole_and_in_order():
+    server, _, queue = build()
+    long = "Clause, " * 200 + "and the end."
+    await call(server, "speak", text=f"First one. {long} Last!")
+    assert [entry[0] for entry in queue.enqueued] == ["First one.", long, "Last!"]
 
 
 async def test_speak_reports_that_it_is_speaking_when_nothing_is_ahead():

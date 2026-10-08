@@ -19,7 +19,7 @@ from speak_core.engines.base import Engine
 from speak_core.queue import QueueStats, Speaker
 from speak_core.queue import describe as describe_queue
 from speak_core.telemetry.wiring import normalize_harness
-from speak_core.text import normalize
+from speak_core.text import normalize, sentences
 
 from walkie import tools
 from walkie.capture import Recorder, RecorderUnavailable, Recording, TrackerSettings, describe
@@ -342,7 +342,7 @@ def create_server(
     ) -> str:
         note_harness(ctx)
         try:
-            spoken = normalize(text, max_chars=settings.speech.max_chars)
+            spoken = normalize(text)
         except ValueError as error:
             raise ToolError(str(error)) from error
 
@@ -350,12 +350,15 @@ def create_server(
             session.registered = True
             await supervisor.register()
 
-        ahead = queue.enqueue(
-            spoken,
-            voice=voice if voice is not None else await session_voice(),
-            rate=rate if rate is not None else session.rate,
-            intent=intent,
-        )
+        chosen = voice if voice is not None else await session_voice()
+        pace = rate if rate is not None else session.rate
+        # A sentence an utterance, so the first is heard while the next is synthesized,
+        # all enqueued with no suspension between them so another call cannot interleave.
+        queued = [
+            queue.enqueue(sentence, voice=chosen, rate=pace, intent=intent)
+            for sentence in sentences(spoken)
+        ]
+        ahead = queued[0]
         if ahead == 0:
             return reply(f'speaking: "{spoken}"')
         return reply(f'queued behind {ahead} utterance{_plural(ahead)}: "{spoken}"')
