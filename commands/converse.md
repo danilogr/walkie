@@ -9,8 +9,7 @@ and `listen`; it changes nothing about how you do the work itself.
 short sentence at the end of a turn. For the rest of this session, speak the answer
 itself: what you found, what you decided, what you are about to do. Each `speak` call
 takes one short sentence and they queue and play in order, so use several in a row
-rather than trying to fit a paragraph into one — anything past about 400 characters in
-a single call is cut off at a word boundary.
+rather than trying to fit a paragraph into one.
 
 **Ask out loud, then listen.** When you need something from the user — a decision, a
 missing detail, a confirmation — say the question with `speak` and then call `listen`
