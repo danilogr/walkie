@@ -30,7 +30,8 @@ walkie needs [uv](https://docs.astral.sh/uv/), which launches it; if `uv` is not
 
 Restart Claude Code. walkie speaks at once through the macOS `say` voice. Run
 `/walkie:setup` once for the neural voice and for listening: it installs NeMo-Speech.cpp
-and its two models (about 1.4 GB) and shows walkie's one-time telemetry notice. Then set
+and its two models (about 1.4 GB), downloads the grammars it reads numbers and
+abbreviations with (9 MB), and shows walkie's one-time telemetry notice. Then set
 `WALKIE_ENGINE=nemo` for the neural voice. walkie works under Antigravity too, as an MCP
 server; `/walkie:converse` is offered there as the `converse` prompt.
 
@@ -101,6 +102,7 @@ Environment variables, read when the server starts:
 | `NEMO_BIN` | `nemo-speech` | the server binary, when it is not on `PATH` |
 | `NEMO_AUTOSTART` | `1` | `0` to run the speech server yourself |
 | `NEMO_TTS_SEED` | unset | pins each voice's timbre across server restarts |
+| `NEMO_TN_DIR` | `~/Library/Caches/speak-core/tn_configs` | the text-normalization grammars `/walkie:setup` downloads |
 
 `NEMO_*` settings are shared with voicebox: whichever plugin starts the speech server
 decides its arguments for both, so keep them identical.

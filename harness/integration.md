@@ -43,6 +43,9 @@ nemo-speech serve --port 8083 --device auto --no-ui \
 - `--tts.seed` pins voice timbre. **Without it the same voice name sounds different
   from one server start to the next** — surprising enough that it cost this project
   an afternoon.
+- `--tn-model-dir ~/Library/Caches/speak-core/tn_configs` reads numbers, prices, times
+  and abbreviations as words, as the plugin's server does. Without it MagpieTTS drops
+  or garbles them. `/walkie:setup` downloads the grammars.
 - `--api-key KEY` requires `Authorization: Bearer KEY` if you expose it beyond
   localhost. `--host` defaults to `127.0.0.1`; keep it there unless you mean it.
 
