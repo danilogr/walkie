@@ -1,4 +1,4 @@
-![walkie](assets/walkie-hero.jpg)
+<img src="assets/walkie-hero.jpg" alt="walkie" width="320" />
 
 # <img src="assets/walkie-detailed.svg" width="36" height="36" alt="" valign="middle" /> walkie
 
