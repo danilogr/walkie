@@ -30,6 +30,7 @@ Engines, supervisor, queue, speaker lock and the telemetry mechanism live in spe
 | File | Purpose |
 |---|---|
 | [`README.md`](../README.md) | What walkie does, installing it, its tools, commands and settings, and the developer quickstart. |
+| [`LICENSE`](../LICENSE) | The MIT license. |
 | [`AGENTS.md`](../AGENTS.md) | Operating rules for AI coding agents working on this repository. |
 | [`TELEMETRY.md`](../TELEMETRY.md) | Every telemetry field, the notice, the install count, and how to opt out. |
 | [`pyproject.toml`](../pyproject.toml) | Package metadata, the speak-core pin, the `walkie-mcp`, `walkie-talk`, `walkie-telemetry` and `walkie-stats` console scripts, and ruff/mypy/pytest settings. |

@@ -136,3 +136,7 @@ dependency. Operating rules are in [AGENTS.md](AGENTS.md); design in
 [harness/design-guidelines.md](harness/design-guidelines.md), the file map in
 [harness/layout.md](harness/layout.md), and building the speech stack into another agent
 in [harness/integration.md](harness/integration.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

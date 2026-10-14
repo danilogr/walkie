@@ -5,5 +5,6 @@
   "author": {
     "name": "Danilo Gasques"
   },
-  "repository": "https://github.com/danilogr/walkie"
+  "repository": "https://github.com/danilogr/walkie",
+  "license": "MIT"
 }
