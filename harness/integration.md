@@ -139,8 +139,8 @@ Defaults worth knowing: capture is **16 kHz mono**, and an utterance ends after
 **3 s** of silence.
 
 speak-core is not published to PyPI — depend on it by git tag
-(`speak-core @ git+https://github.com/danilogr/speak-core@v0.4.0`, a private
-repository), or copy the files you need. They are plain `asyncio` with no MCP in them.
+(`speak-core @ git+https://github.com/danilogr/speak-core@v0.4.0`, a public
+MIT-licensed repository), or copy the files you need. They are plain `asyncio` with no MCP in them.
 
 ## The MCP server
 
