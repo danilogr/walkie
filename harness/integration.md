@@ -95,6 +95,7 @@ transcript before trusting it.
 
 ```python
 from openai import OpenAI
+
 client = OpenAI(base_url="http://127.0.0.1:8083/v1", api_key="unused")
 
 client.audio.speech.create(model="magpietts", voice="Sofia", input=text)

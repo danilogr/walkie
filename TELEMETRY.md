@@ -57,8 +57,10 @@ daily count per version, OS, event and country and keeps nothing per request. On
 ## What is sent
 
 With telemetry `on`, and only then: counts, timings and fixed vocabularies. This is every
-field; the machine-checked version is `contract/v1/schema.remote.sql` in the
-speak-telemetry repository, the only schema the server accepts.
+field; the machine-checked version is
+[`tests/contract/v1/schema.remote.sql`](tests/contract/v1/schema.remote.sql), a
+byte-for-byte copy of the only schema the server accepts (the server's own repository
+is not public).
 
 **Once per install:** a random `install_id`; `first_seen_at` and `last_seen_at`;
 `plugin_version`; `disclosure_ver` (which version of this page you were shown);
