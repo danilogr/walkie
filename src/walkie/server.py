@@ -32,7 +32,7 @@ from walkie.telemetry.session import TelemetrySession
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 # The queue decides when it is wedged, because only it can see its own progress. This
 # is the outer guard: a Queue implementation that neither finishes nor raises would

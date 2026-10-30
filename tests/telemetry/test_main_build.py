@@ -170,7 +170,7 @@ async def test_talk_collects_and_pings_once_the_notice_is_shown(tmp_path, dictat
     mark_notice_shown(env)
     await talk._run(Settings.from_env(env), env)
     assert seen["telemetry"] is not None
-    assert pings == [{"plugin_version": "1.0.1", "os": sys.platform, "event": "install"}]
+    assert pings == [{"plugin_version": "1.0.2", "os": sys.platform, "event": "install"}]
 
 
 async def test_talk_under_do_not_track_keeps_and_sends_nothing(tmp_path, dictated):
