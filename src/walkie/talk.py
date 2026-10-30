@@ -259,7 +259,6 @@ async def _run(settings: Settings, env: Mapping[str, str]) -> str:
             transcriber=NemoTranscriber(
                 base_url=settings.server.url,
                 api_key=settings.server.api_key,
-                model=settings.server.asr_model,
                 timeout=transcription_timeout(settings),
             ),
             lock=MicLock(state_dir=settings.state_dir, is_alive=process_is_alive),

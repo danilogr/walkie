@@ -14,10 +14,10 @@ def project() -> dict:
     return tomllib.loads((ROOT / "pyproject.toml").read_text())
 
 
-def test_plugin_json_pyproject_and_the_server_agree_on_1_0_0():
+def test_plugin_json_pyproject_and_the_server_agree_on_1_0_1():
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
     assert plugin["name"] == project()["project"]["name"] == "walkie"
-    assert plugin["version"] == project()["project"]["version"] == VERSION == "1.0.0"
+    assert plugin["version"] == project()["project"]["version"] == VERSION == "1.0.1"
 
 
 def test_plugin_json_names_its_author():

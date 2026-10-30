@@ -133,11 +133,11 @@ async def test_the_sessions_own_speech_waits_while_a_recording_holds_the_speaker
 async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch, tmp_path):
     """`/walkie:talk` wires up its own objects, and nothing else exercises that.
 
-    The transcriber block is character-identical to the one in `__main__`, which is the
-    risk: `tts_model` and `asr_model` are both `str`, so handing the speech model to the
-    transcriber would transcribe against a voice and is caught by neither mypy nor any
-    other test. Two call sites, so the answer is to pin it rather than extract a shared
-    builder.
+    The transcriber block is character-identical to the one in `__main__`, and the
+    supervisor is handed both models: `tts_model` and `asr_model` are both `str`, so
+    swapping them would start the server with a voice for a transcriber, and neither mypy
+    nor any other test would notice. Two call sites, so the answer is to pin it rather
+    than extract a shared builder.
     """
     import walkie.talk as talk
 
@@ -163,7 +163,6 @@ async def test_talk_builds_its_collaborators_the_way_the_server_does(monkeypatch
 
     transcriber = seen["transcriber"]
     assert transcriber._base_url == "http://127.0.0.1:9999"
-    assert transcriber._model == "parakeet-tdt"
     assert transcriber._timeout == transcription_timeout(settings)
 
     supervisor = seen["supervisor"]

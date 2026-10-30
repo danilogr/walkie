@@ -38,7 +38,7 @@ nemo-speech serve --port 8083 --device auto --no-ui \
 ```
 
 - `--device` takes `auto`, `cpu`, `cuda[:N]`, `metal`, or `vulkan[:N]`. The plugin
-  runs `auto` (Metal on Apple silicon) and needs NeMo-Speech.cpp 0.2.0 or later. On
+  runs `auto` (Metal on Apple silicon) and needs NeMo-Speech.cpp 0.3.0 or later. On
   0.2.0, CPU synthesis on an M5 is about 0.07x realtime, too slow for speech.
 - `--tts.seed` pins voice timbre. **Without it the same voice name sounds different
   from one server start to the next** — surprising enough that it cost this project
@@ -81,9 +81,10 @@ curl -X POST http://127.0.0.1:8083/v1/audio/transcriptions \
   -F "file=@clip.wav"
 ```
 
-Returns `{"text": "..."}`. The `model` field is optional; the loaded transcription
-model is used either way, and both its full id and the short `nemotron-3.5` are
-accepted. A 5.9-second 16 kHz mono clip came back in **0.5–0.7 s** on CPU, warm; on
+Returns `{"text": "..."}`. Leave `model` out: the loaded transcription model is used.
+NeMo-Speech.cpp 0.3.0 accepts only the id `/v1/models` reports, which is the model's file
+name (`.nemotron-3.5-asr-streaming-0.6b.q8_0.gguf`), and answers 404 `unknown_model` to
+the short `nemotron-3.5`; speak-core sends no `model`. A 5.9-second 16 kHz mono clip came back in **0.5–0.7 s** on CPU, warm; on
 Metal with 0.2.0, a 4-second clip came back in **0.06 s**.
 
 16 kHz mono PCM WAV is the native input. The `transcribe` CLI resamples other rates
@@ -99,7 +100,7 @@ from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:8083/v1", api_key="unused")
 
 client.audio.speech.create(model="magpietts", voice="Sofia", input=text)
-client.audio.transcriptions.create(model="nemotron-3.5", file=open(path, "rb"))
+client.audio.transcriptions.create(model="", file=open(path, "rb"))  # "": the loaded model
 ```
 
 ### Streaming
@@ -140,7 +141,7 @@ Defaults worth knowing: capture is **16 kHz mono**, and an utterance ends after
 **3 s** of silence.
 
 speak-core is not published to PyPI — depend on it by git tag
-(`speak-core @ git+https://github.com/danilogr/speak-core@v0.4.0`, a public
+(`speak-core @ git+https://github.com/danilogr/speak-core@v0.5.0`, a public
 MIT-licensed repository), or copy the files you need. They are plain `asyncio` with no MCP in them.
 
 ## The MCP server
